@@ -272,6 +272,8 @@ class DeobfuScripter(ServiceBase):
         output = text
         for full in re.findall(rb'"(?:[^"]+[A-Za-z0-9]+\^[A-Za-z0-9]+[^"]+)+"', text):
             output = output.replace(full, full.replace(b"^", b""))
+        for full in re.findall(rb'"(?:[^"]+[A-Za-z0-9]+`[A-Za-z0-9]+[^"]+)+"', output):
+            output = output.replace(full, full.replace(b"`", b""))
         if output == text:
             output = None
         return output
@@ -419,15 +421,15 @@ class DeobfuScripter(ServiceBase):
 
     # noinspection PyBroadException
     def extract_htmlscript(self, text):
-        scripts = []
+        objects = []
         try:
-            for s in BeautifulSoup(text, 'lxml').find_all('script'):
-                if s.string is not None:
-                    scripts.append(str(s).encode('utf-8'))
+            for tag_type in ['object', 'embed', 'script']:
+                for s in BeautifulSoup(text, 'lxml').find_all(tag_type):
+                    objects.append(str(s).encode('utf-8'))
         except Exception as e:
             self.log.warning(f"Failure in extract_htmlscript function: {str(e)}")
-            scripts = None
-        return scripts
+            objects = None
+        return objects
 
     # --- Execute --------------------------------------------------------------------------------------------------
 
@@ -626,5 +628,3 @@ class DeobfuScripter(ServiceBase):
                     for f in self.files_extracted:
                         ext_file_res.add_line(os.path.basename(f))
                         request.add_extracted(f, os.path.basename(f), "File of interest deobfuscated from sample")
-
-
