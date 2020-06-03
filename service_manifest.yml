@@ -1,5 +1,5 @@
 name: DeobfuScripter
-version: 1
+version: $SERVICE_TAG
 description: Static script de-obfuscator. The purpose is not to get surgical de-obfuscation, but rather to extract obfuscated IOCs.
 
 accepts: code/.*
@@ -72,6 +72,6 @@ heuristics:
     score: 10
 
 docker_config:
-  image: ${REGISTRY}cccs/assemblyline-service-deobfuscripter:latest
+  image: ${REGISTRY}cccs/assemblyline-service-deobfuscripter:$SERVICE_TAG
   cpu_cores: 1
   ram_mb: 256
