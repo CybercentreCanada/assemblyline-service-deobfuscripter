@@ -384,7 +384,7 @@ class DeobfuScripter(ServiceBase):
             else:
                 option_a.append((f, x, k, None))
             # try by shifting the key by 1
-            res = self.xor_with_key(binascii.a2b_hex(x), k[1:] + k[0])
+            res = self.xor_with_key(binascii.a2b_hex(x), k[1:] + k[0:1])
             if self.printable_ratio(res) == 1:
                 option_b.append((f, x, k, res))
                 # print 'B:',f,x,k, res
