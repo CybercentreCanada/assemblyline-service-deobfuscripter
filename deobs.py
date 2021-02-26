@@ -468,7 +468,8 @@ class DeobfuScripter(ServiceBase):
                         if ioc_res:
                             ioc_res.add_line(f"Found {k.upper().replace('.', ' ')}: {safe_str(v)}")
                             ioc_res.add_tag(k, v)
-                        before.add((k, v))
+                        # Query string may be mangled by deobfuscation
+                        before.add((k, v.split(b'?', 1)[0]) if k == 'network.static.uri' else (k, v))
 
         # --- Prepare Techniques ----------------------------------------------------------------------------------
         techniques = [
@@ -573,7 +574,8 @@ class DeobfuScripter(ServiceBase):
                             diff_tags[k].append(asc_asc)
                     else:
                         for v in val:
-                            if (k, v) not in before:
+                            # Compare URIs without query string
+                            if ((k, v.split(b'?', 1)) if k == 'network.static.uri' else (k, v)) not in before:
                                 diff_tags.setdefault(k, [])
                                 diff_tags[k].append(v)
 
