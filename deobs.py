@@ -3,7 +3,6 @@ import hashlib
 import magic
 import os
 import re
-import unicodedata
 
 from bs4 import BeautifulSoup
 from collections import Counter
@@ -457,19 +456,12 @@ class DeobfuScripter(ServiceBase):
             else:
                 ioc_res = None
             for k, val in pat_values.items():
-                if val == "":
-                    asc_asc = unicodedata.normalize('NFKC', val).encode('ascii', 'ignore')
+                for v in val:
                     if ioc_res:
-                        ioc_res.add_line(f"Found {k.upper().replace('.', ' ')}: {safe_str(asc_asc)}")
-                        ioc_res.add_tag(k, asc_asc)
-                    before.add((k, asc_asc))
-                else:
-                    for v in val:
-                        if ioc_res:
-                            ioc_res.add_line(f"Found {k.upper().replace('.', ' ')}: {safe_str(v)}")
-                            ioc_res.add_tag(k, v)
-                        # Query string may be mangled by deobfuscation
-                        before.add((k, v.split(b'?', 1)[0]) if k == 'network.static.uri' else (k, v))
+                        ioc_res.add_line(f"Found {k.upper().replace('.', ' ')}: {safe_str(v)}")
+                        ioc_res.add_tag(k, v)
+                    # Query string may be mangled by deobfuscation
+                    before.add((k, v.split(b'?', 1)[0]) if k == 'network.static.uri' else (k, v))
 
         # --- Prepare Techniques ----------------------------------------------------------------------------------
         techniques = [
@@ -567,17 +559,11 @@ class DeobfuScripter(ServiceBase):
                 diff_tags = {}
 
                 for k, val in pat_values.items():
-                    if val == "":
-                        asc_asc = unicodedata.normalize('NFKC', val).encode('ascii', 'ignore')
-                        if (k, asc_asc) not in before:
+                    for v in val:
+                        # Compare URIs without query string
+                        if ((k, v.split(b'?', 1)) if k == 'network.static.uri' else (k, v)) not in before:
                             diff_tags.setdefault(k, [])
-                            diff_tags[k].append(asc_asc)
-                    else:
-                        for v in val:
-                            # Compare URIs without query string
-                            if ((k, v.split(b'?', 1)) if k == 'network.static.uri' else (k, v)) not in before:
-                                diff_tags.setdefault(k, [])
-                                diff_tags[k].append(v)
+                            diff_tags[k].append(v)
 
                 if request.deep_scan or \
                         (len(clean) > 1000 and heur_id >= 4) or diff_tags:
