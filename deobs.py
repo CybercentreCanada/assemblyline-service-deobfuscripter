@@ -427,7 +427,7 @@ class DeobfuScripter(ServiceBase):
                     objects.append(str(s).encode('utf-8'))
         except Exception as e:
             self.log.warning(f"Failure in extract_htmlscript function: {str(e)}")
-            objects = None
+            objects = []
         return objects
 
     # --- Execute --------------------------------------------------------------------------------------------------
@@ -444,7 +444,6 @@ class DeobfuScripter(ServiceBase):
 
         self.files_extracted = set()
         self.hashes = set()
-        before = set()
 
         # --- Pre-Processing --------------------------------------------------------------------------------------
         # Get all IOCs prior to de-obfuscation
@@ -453,15 +452,11 @@ class DeobfuScripter(ServiceBase):
             if request.get_param('extract_original_iocs'):
                 ioc_res = ResultSection("The following IOCs were found in the original file", parent=request.result,
                                         body_format=BODY_FORMAT.MEMORY_DUMP)
-            else:
-                ioc_res = None
-            for k, val in pat_values.items():
-                for v in val:
-                    if ioc_res:
-                        ioc_res.add_line(f"Found {k.upper().replace('.', ' ')}: {safe_str(v)}")
-                        ioc_res.add_tag(k, v)
-                    # Query string may be mangled by deobfuscation
-                    before.add((k, v.split(b'?', 1)[0]) if k == 'network.static.uri' else (k, v))
+                for k, val in pat_values.items():
+                    for v in val:
+                        if ioc_res:
+                            ioc_res.add_line(f"Found {k.upper().replace('.', ' ')}: {safe_str(v)}")
+                            ioc_res.add_tag(k, v)
 
         # --- Prepare Techniques ----------------------------------------------------------------------------------
         techniques = [
@@ -560,8 +555,9 @@ class DeobfuScripter(ServiceBase):
 
                 for k, val in pat_values.items():
                     for v in val:
+                        print(k, v, type(v))
                         # Compare URIs without query string
-                        if ((k, v.split(b'?', 1)) if k == 'network.static.uri' else (k, v)) not in before:
+                        if (v.split(b'?', 1)[0] if k == 'network.static.uri' else v) not in request.file_contents:
                             diff_tags.setdefault(k, [])
                             diff_tags[k].append(v)
 
