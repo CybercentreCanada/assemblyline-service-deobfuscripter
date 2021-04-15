@@ -1,17 +1,16 @@
 import binascii
 import hashlib
+import magic
 import os
 import re
-import tempfile
-from collections import Counter
 
-import magic
 from bs4 import BeautifulSoup
+from collections import Counter
 
 from assemblyline.common.str_utils import safe_str
 from assemblyline_v4_service.common.balbuzard.patterns import PatternMatch
 from assemblyline_v4_service.common.base import ServiceBase
-from assemblyline_v4_service.common.result import BODY_FORMAT, Heuristic, Result, ResultSection
+from assemblyline_v4_service.common.result import Result, ResultSection, BODY_FORMAT, Heuristic
 
 
 class DeobfuScripter(ServiceBase):
@@ -580,10 +579,10 @@ class DeobfuScripter(ServiceBase):
                     byte_count = 500
                     fn = f"{request.file_name}_decoded_final"
                     fp = os.path.join(self.working_directory, fn)
-                    with tempfile.NamedTemporaryFile(dir=self.working_directory, prefix=fn) as dcf:
+                    with open(fp, 'wb+') as dcf:
                         dcf.write(clean)
-                        self.log.debug(f"Submitted dropped file for analysis: {dcf.name}")
-                        request.add_extracted(dcf.name, fn, "Final deobfuscation layer")
+                        self.log.debug(f"Submitted dropped file for analysis: {fp}")
+                    request.add_extracted(fp, fn, "Final deobfuscation layer")
 
                 ResultSection(f"First {byte_count} bytes of the final layer:", body=safe_str(clean[:byte_count]),
                               body_format=BODY_FORMAT.MEMORY_DUMP, parent=request.result)
