@@ -1,16 +1,17 @@
 import binascii
 import hashlib
-import magic
 import os
 import re
-
-from bs4 import BeautifulSoup
+import tempfile
 from collections import Counter
+
+import magic
+from bs4 import BeautifulSoup
 
 from assemblyline.common.str_utils import safe_str
 from assemblyline_v4_service.common.balbuzard.patterns import PatternMatch
 from assemblyline_v4_service.common.base import ServiceBase
-from assemblyline_v4_service.common.result import Result, ResultSection, BODY_FORMAT, Heuristic
+from assemblyline_v4_service.common.result import BODY_FORMAT, Heuristic, Result, ResultSection
 
 
 class DeobfuScripter(ServiceBase):
@@ -76,14 +77,14 @@ class DeobfuScripter(ServiceBase):
                     if r[0] == 8:
                         while data != b'':
                             decoded += binascii.a2b_hex(data[8:10]) + binascii.a2b_hex(data[6:8]) + \
-                                       binascii.a2b_hex(data[4:6]) + binascii.a2b_hex(data[2:4])
+                                binascii.a2b_hex(data[4:6]) + binascii.a2b_hex(data[2:4])
                             data = data[10:]
                     if r[0] == 16:
                         while data != b'':
                             decoded += binascii.a2b_hex(data[16:18]) + binascii.a2b_hex(data[14:16]) + \
-                                       binascii.a2b_hex(data[12:14]) + binascii.a2b_hex(data[10:12]) + \
-                                       binascii.a2b_hex(data[8:10]) + binascii.a2b_hex(data[6:8]) + \
-                                       binascii.a2b_hex(data[4:6]) + binascii.a2b_hex(data[2:4])
+                                binascii.a2b_hex(data[12:14]) + binascii.a2b_hex(data[10:12]) + \
+                                binascii.a2b_hex(data[8:10]) + binascii.a2b_hex(data[6:8]) + \
+                                binascii.a2b_hex(data[4:6]) + binascii.a2b_hex(data[2:4])
                             data = data[18:]
 
                     # Remove trailing NULL bytes
@@ -553,16 +554,14 @@ class DeobfuScripter(ServiceBase):
                 pat_values = patterns.ioc_match(clean, bogon_ip=True, just_network=False)
                 diff_tags = {}
 
-                for k, val in pat_values.items():
-                    for v in val:
-                        print(k, v, type(v))
-                        # Compare URIs without query string
-                        if (v.split(b'?', 1)[0] if k == 'network.static.uri' else v) not in request.file_contents:
-                            diff_tags.setdefault(k, [])
-                            diff_tags[k].append(v)
+                for uri in pat_values.get('network.static.uri', []):
+                    # Compare URIs without query string
+                    uri = uri.split(b'?', 1)[0]
+                    if uri not in request.file_contents:
+                        diff_tags.setdefault(k, [])
+                        diff_tags[k].append(v)
 
-                if request.deep_scan or \
-                        (len(clean) > 1000 and heur_id >= 4) or diff_tags:
+                if request.deep_scan or (len(clean) > 1000 and heur_id >= 4) or diff_tags:
                     extract_file = True
 
                 # Display obfuscation steps
@@ -581,10 +580,10 @@ class DeobfuScripter(ServiceBase):
                     byte_count = 500
                     fn = f"{request.file_name}_decoded_final"
                     fp = os.path.join(self.working_directory, fn)
-                    with open(fp, 'wb') as dcf:
+                    with tempfile.NamedTemporaryFile(dir=self.working_directory, prefix=fn) as dcf:
                         dcf.write(clean)
-                        self.log.debug(f"Submitted dropped file for analysis: {fp}")
-                    request.add_extracted(fp, fn, "Final deobfuscation layer")
+                        self.log.debug(f"Submitted dropped file for analysis: {dcf.name}")
+                        request.add_extracted(dcf.name, fn, "Final deobfuscation layer")
 
                 ResultSection(f"First {byte_count} bytes of the final layer:", body=safe_str(clean[:byte_count]),
                               body_format=BODY_FORMAT.MEMORY_DUMP, parent=request.result)
