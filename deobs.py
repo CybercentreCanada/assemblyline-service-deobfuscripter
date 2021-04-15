@@ -1,15 +1,19 @@
 import binascii
 import hashlib
-import magic
 import os
 import re
 
-from bs4 import BeautifulSoup
 from collections import Counter
+from typing import Dict, List, Optional, Set, Tuple
+
+import magic
+
+from bs4 import BeautifulSoup
 
 from assemblyline.common.str_utils import safe_str
 from assemblyline_v4_service.common.balbuzard.patterns import PatternMatch
 from assemblyline_v4_service.common.base import ServiceBase
+from assemblyline_v4_service.common.request import ServiceRequest
 from assemblyline_v4_service.common.result import Result, ResultSection, BODY_FORMAT, Heuristic
 
 
@@ -18,24 +22,24 @@ class DeobfuScripter(ServiceBase):
     VALIDCHARS = b' 0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~'
     BINCHARS = bytes(list(set(range(0, 256)) - set(VALIDCHARS)))
 
-    def __init__(self, config=None):
-        super(DeobfuScripter, self).__init__(config)
-        self.hashes = set()
-        self.files_extracted = set()
+    def __init__(self, config: Optional[Dict] = None) -> None:
+        super().__init__(config)
+        self.hashes: Set[str] = set()
+        self.files_extracted: Set[str] = set()
 
-    def start(self):
+    def start(self) -> None:
         self.log.debug("DeobfuScripter service started")
 
     # --- Support Modules ----------------------------------------------------------------------------------------------
 
-    def printable_ratio(self, text):
+    def printable_ratio(self, text: bytes) -> float:
         return float(float(len(text.translate(None, self.BINCHARS))) / float(len(text)))
 
     @staticmethod
-    def add1b(s, k):
+    def add1b(s: bytes, k: int) -> bytes:
         return bytes([(c + k) & 0xff for c in s])
 
-    def charcode(self, text):
+    def charcode(self, text: bytes) -> Optional[bytes]:
         output = None
         arrayofints = list(filter(lambda n: n < 256,
                                   map(int, re.findall(r'(\d+)', str(re.findall(rb'\D{1,2}\d{2,3}', text))))))
@@ -48,7 +52,7 @@ class DeobfuScripter(ServiceBase):
         return output
 
     @staticmethod
-    def charcode_hex(text):
+    def charcode_hex(text: bytes) -> Optional[bytes]:
         output = None
         s1 = text
         enc_str = [b'\\u', b'%u', b'\\x', b'0x']
@@ -96,7 +100,7 @@ class DeobfuScripter(ServiceBase):
         return output
 
     @staticmethod
-    def chr_decode(text):
+    def chr_decode(text: bytes) -> Optional[bytes]:
         output = text
         for fullc, c in re.findall(rb'(chr[bw]?\(([0-9]{1,3})\))', output, re.I):
             # noinspection PyBroadException
@@ -105,11 +109,11 @@ class DeobfuScripter(ServiceBase):
             except Exception:
                 continue
         if output == text:
-            output = None
+            return None
         return output
 
     @staticmethod
-    def string_replace(text):
+    def string_replace(text: bytes) -> Optional[bytes]:
         output = None
         if b'replace(' in text.lower():
             # Process string with replace functions calls
@@ -140,7 +144,7 @@ class DeobfuScripter(ServiceBase):
             output = re.sub(rb'\.replace\(\s*/([^)]+)/g?, [\'"]([^\'"]*)[\'"]\)', b'', s1)
         return output
 
-    def b64decode_str(self, text):
+    def b64decode_str(self, text: bytes) -> Optional[bytes]:
         output = None
         b64str = re.findall(b'((?:[A-Za-z0-9+/]{3,}={0,2}(?:&#[x1][A0];)?[\r]?[\n]?){6,})', text)
         s1 = text
@@ -184,7 +188,7 @@ class DeobfuScripter(ServiceBase):
         return output
 
     @staticmethod
-    def vars_of_fake_arrays(text):
+    def vars_of_fake_arrays(text: bytes) -> Optional[bytes]:
 
         output = None
         replacements = re.findall(rb'var\s+([^\s=]+)\s*=\s*\[([^\]]+)\]\[(\d+)\]', text)
@@ -202,7 +206,7 @@ class DeobfuScripter(ServiceBase):
                 output = s1
         return output
 
-    def array_of_strings(self, text):
+    def array_of_strings(self, text: bytes) -> Optional[bytes]:
         # noinspection PyBroadException
         try:
             output = None
@@ -227,7 +231,7 @@ class DeobfuScripter(ServiceBase):
         return output
 
     @staticmethod
-    def concat_strings(text):
+    def concat_strings(text: bytes) -> Optional[bytes]:
         output = None
         # Line continuation character in VB -- '_'
         s1 = re.sub(rb'[\'"][\s\n_]*?[+&][\s\n_]*[\'"]', b'', text)
@@ -237,7 +241,7 @@ class DeobfuScripter(ServiceBase):
         return output
 
     @staticmethod
-    def str_reverse(text):
+    def str_reverse(text: bytes) -> Optional[bytes]:
         output = None
         s1 = text
         # VBA format StrReverse("[text]")
@@ -250,7 +254,7 @@ class DeobfuScripter(ServiceBase):
         return output
 
     @staticmethod
-    def powershell_vars(text):
+    def powershell_vars(text: bytes) -> Optional[bytes]:
         output = None
         replacements_string = re.findall(rb'(\$(?:\w+|{[^\}]+\}))\s*=[^=]\s*[\"\']([^\"\']+)[\"\']', text)
         replacements_func = re.findall(rb'(\$(?:\w+|{[^\}]+\}))\s*=\s*([^=\"\'\s$]{3,50})[\s]', text)
@@ -267,20 +271,20 @@ class DeobfuScripter(ServiceBase):
         return output
 
     @staticmethod
-    def powershell_carets(text):
+    def powershell_carets(text: bytes) -> Optional[bytes]:
         output = text
         for full in re.findall(rb'"(?:[^"]+[A-Za-z0-9]+\^[A-Za-z0-9]+[^"]+)+"', text):
             output = output.replace(full, full.replace(b"^", b""))
         for full in re.findall(rb'"(?:[^"]+[A-Za-z0-9]+`[A-Za-z0-9]+[^"]+)+"', output):
             output = output.replace(full, full.replace(b"`", b""))
         if output == text:
-            output = None
+            return None
         return output
 
     # noinspection PyBroadException
-    def msoffice_embedded_script_string(self, text):
+    def msoffice_embedded_script_string(self, text: bytes) -> Optional[bytes]:
         try:
-            scripts = {}
+            scripts: Dict[bytes, List[bytes]] = {}
             output = text
             # bad, prevent false var replacements like YG="86"
             # Replace regular variables
@@ -298,14 +302,14 @@ class DeobfuScripter(ServiceBase):
                 output += b"\n".join(script_lines)
 
             if output == text:
-                output = None
+                return None
+            return output
 
         except Exception as e:
             self.log.warning(f"Technique msoffice_embedded_script_string failed with error: {str(e)}")
-            output = None
-        return output
+            return None
 
-    def mswordmacro_vars(self, text):
+    def mswordmacro_vars(self, text: bytes) -> Optional[bytes]:
         # noinspection PyBroadException
         try:
             output = text
@@ -362,18 +366,18 @@ class DeobfuScripter(ServiceBase):
                                 output, count=5)
 
             if output == text:
-                output = None
+                return None
+            return output
 
         except Exception as e:
             self.log.warning(f"Technique mswordmacro_vars failed with error: {str(e)}")
-            output = None
-        return output
+            return None
 
-    def simple_xor_function(self, text):
+    def simple_xor_function(self, text: bytes) -> Optional[bytes]:
         output = None
         xorstrings = re.findall(rb'(\w+\("((?:[0-9A-Fa-f][0-9A-Fa-f])+)"\s*,\s*"([^"]+)"\))', text)
-        option_a = []
-        option_b = []
+        option_a: List[Tuple[bytes, bytes, bytes, Optional[bytes]]] = []
+        option_b: List[Tuple[bytes, bytes, bytes, Optional[bytes]]] = []
         s1 = text
         for f, x, k in xorstrings:
             res = self.xor_with_key(binascii.a2b_hex(x), k)
@@ -405,21 +409,21 @@ class DeobfuScripter(ServiceBase):
         return output
 
     @staticmethod
-    def xor_with_key(s, k):
+    def xor_with_key(s: bytes, k: bytes) -> bytes:
         return bytes([a ^ b for a, b in zip(s, (len(s) // len(k) + 1) * k)])
 
     @staticmethod
-    def zp_xor_with_key(s, k):
+    def zp_xor_with_key(s: bytes, k: bytes) -> bytes:
         return bytes([a if a == 0 or a == b else a ^ b for a, b in zip(s, (len(s) // len(k) + 1) * k)])
 
     @staticmethod
-    def clean_up_final_layer(text):
+    def clean_up_final_layer(text: bytes) -> bytes:
         output = re.sub(rb'\r', b'', text)
         output = re.sub(rb'<deobsfuscripter:[^>]+>\n?', b'', output)
         return output
 
     # noinspection PyBroadException
-    def extract_htmlscript(self, text):
+    def extract_htmlscript(self, text: bytes) -> List[bytes]:
         objects = []
         try:
             for tag_type in ['object', 'embed', 'script']:
@@ -432,7 +436,7 @@ class DeobfuScripter(ServiceBase):
 
     # --- Execute --------------------------------------------------------------------------------------------------
 
-    def execute(self, request):
+    def execute(self, request: ServiceRequest) -> None:
         # --- Setup ----------------------------------------------------------------------------------------------
         request.result = Result()
         patterns = PatternMatch()
@@ -532,7 +536,6 @@ class DeobfuScripter(ServiceBase):
         if len(layers_list) > 0:
             extract_file = False
             num_layers = len(layers_list)
-            heur_id = None
 
             # Compute heuristic
             if num_layers < 5:
@@ -543,7 +546,7 @@ class DeobfuScripter(ServiceBase):
                 heur_id = 3
             elif num_layers < 100:
                 heur_id = 4
-            elif num_layers >= 100:
+            else: # num_layers >= 100
                 heur_id = 5
 
             # Cleanup final layer
@@ -551,7 +554,7 @@ class DeobfuScripter(ServiceBase):
             if clean != request.file_contents:
                 # Check for new IOCs
                 pat_values = patterns.ioc_match(clean, bogon_ip=True, just_network=False)
-                diff_tags = {}
+                diff_tags: Dict[str, List[bytes]] = {}
 
                 for uri in pat_values.get('network.static.uri', []):
                     # Compare URIs without query string
