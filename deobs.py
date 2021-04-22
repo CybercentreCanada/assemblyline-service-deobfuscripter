@@ -147,9 +147,9 @@ class DeobfuScripter(ServiceBase):
             for str1, str2, str3 in replacements:
                 output = output.replace(str1, str1.replace(str2, str3))
             output = re.sub(rb'\.replace\(\s*/([^)]+)/g?, [\'"]([^\'"]*)[\'"]\)', b'', output)
-        if output == text:
-            return None
-        return output
+            if output != text:
+                return output
+        return None
 
     def b64decode_str(self, text: bytes) -> Optional[bytes]:
         """ Decode base64 """
