@@ -590,7 +590,7 @@ class DeobfuScripter(ServiceBase):
                 if extract_file:
                     # Save extracted file
                     byte_count = 500
-                    file_name = f"{request.file_name}_decoded_final"
+                    file_name = f"{os.path.basename(request.file_name)}_decoded_final"
                     file_path = os.path.join(self.working_directory, file_name)
                     with open(file_path, 'wb+') as f:
                         f.write(clean)
