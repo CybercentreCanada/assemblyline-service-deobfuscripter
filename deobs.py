@@ -3,7 +3,7 @@
 import binascii
 import hashlib
 import os
-import re
+import regex
 
 from collections import Counter
 from typing import Dict, List, Optional, Set, Tuple
@@ -47,7 +47,7 @@ class DeobfuScripter(ServiceBase):
     def charcode(self, text: bytes) -> Optional[bytes]:
         """ Replace character codes with the corresponding characters """
         arrayofints = list(filter(lambda n: n < 256,
-                                  map(int, re.findall(r'(\d+)', str(re.findall(rb'\D{1,2}\d{2,3}', text))))))
+                                  map(int, regex.findall(r'(\d+)', str(regex.findall(rb'\D{1,2}\d{2,3}', text))))))
         if len(arrayofints) > 20:
             output = bytes(arrayofints)
             if self.printable_ratio(output) > .75 and (float(len(output)) / float(len(text))) > .10:
@@ -63,13 +63,13 @@ class DeobfuScripter(ServiceBase):
         enc_str = [b'\\u', b'%u', b'\\x', b'0x']
 
         for encoding in enc_str:
-            char_len = [(16, re.compile(rb'(?:' + re.escape(encoding) + b'[A-Fa-f0-9]{16}){2,}')),
-                        (8, re.compile(rb'(?:' + re.escape(encoding) + b'[A-Fa-f0-9]{8}){2,}')),
-                        (4, re.compile(rb'(?:' + re.escape(encoding) + b'[A-Fa-f0-9]{4}){2,}')),
-                        (2, re.compile(rb'(?:' + re.escape(encoding) + b'[A-Fa-f0-9]{2}){2,}'))]
+            char_len = [(16, regex.compile(rb'(?:' + regex.escape(encoding) + b'[A-Fa-f0-9]{16}){2,}')),
+                        (8, regex.compile(rb'(?:' + regex.escape(encoding) + b'[A-Fa-f0-9]{8}){2,}')),
+                        (4, regex.compile(rb'(?:' + regex.escape(encoding) + b'[A-Fa-f0-9]{4}){2,}')),
+                        (2, regex.compile(rb'(?:' + regex.escape(encoding) + b'[A-Fa-f0-9]{2}){2,}'))]
 
             for r in char_len:
-                hexchars = set(re.findall(r[1], text))
+                hexchars = set(regex.findall(r[1], text))
 
                 for hex_char in hexchars:
                     data = hex_char
@@ -96,7 +96,7 @@ class DeobfuScripter(ServiceBase):
                             data = data[18:]
 
                     # Remove trailing NULL bytes
-                    final_dec = re.sub(b'[\x00]*$', b'', decoded)
+                    final_dec = regex.sub(b'[\x00]*$', b'', decoded)
                     output = output.replace(hex_char, final_dec)
 
         if output == text:
@@ -107,10 +107,10 @@ class DeobfuScripter(ServiceBase):
     def chr_decode(text: bytes) -> Optional[bytes]:
         """ Replace calls to chr with the corresponding character """
         output = text
-        for fullc, c in re.findall(rb'(chr[bw]?\(([0-9]{1,3})\))', output, re.I):
+        for fullc, c in regex.findall(rb'(chr[bw]?\(([0-9]{1,3})\))', output, regex.I):
             # noinspection PyBroadException
             try:
-                output = re.sub(re.escape(fullc), '"{}"'.format(chr(int(c))).encode('utf-8'), output)
+                output = regex.sub(regex.escape(fullc), '"{}"'.format(chr(int(c))).encode('utf-8'), output)
             except Exception:
                 continue
         if output == text:
@@ -126,11 +126,11 @@ class DeobfuScripter(ServiceBase):
             output = text
             # Find all occurrences of string replace (JS)
             for strreplace in [o[0] for o in
-                               re.findall(rb'(["\'][^"\']+["\']((\.replace\([^)]+\))+))', output, flags=re.I)]:
+                               regex.findall(rb'(["\'][^"\']+["\']((\.replace\([^)]+\))+))', output, flags=regex.I)]:
                 substitute = strreplace
                 # Extract all substitutions
-                for str1, str2 in re.findall(rb'\.replace\([/\'"]([^,]+)[/\'\"]g?\s*,\s*[\'\"]([^)]*)[\'\"]\)',
-                                             substitute, flags=re.I):
+                for str1, str2 in regex.findall(rb'\.replace\([/\'"]([^,]+)[/\'\"]g?\s*,\s*[\'\"]([^)]*)[\'\"]\)',
+                                                substitute, flags=regex.I):
                     # Execute the substitution
                     substitute = substitute.replace(str1, str2)
                 # Remove the replace calls from the layer (prevent accidental substitutions in the next step)
@@ -138,22 +138,22 @@ class DeobfuScripter(ServiceBase):
                 output = output.replace(strreplace, substitute)
 
             # Process global string replace
-            replacements = re.findall(rb'replace\(\s*/([^)]+)/g?, [\'"]([^\'"]*)[\'"]', output)
+            replacements = regex.findall(rb'replace\(\s*/([^)]+)/g?, [\'"]([^\'"]*)[\'"]', output)
             for str1, str2 in replacements:
                 output = output.replace(str1, str2)
             # Process VB string replace
-            replacements = re.findall(rb'Replace\(\s*["\']?([^,"\']*)["\']?\s*,\s*["\']?'
-                                      rb'([^,"\']*)["\']?\s*,\s*["\']?([^,"\']*)["\']?', output)
+            replacements = regex.findall(rb'Replace\(\s*["\']?([^,"\']*)["\']?\s*,\s*["\']?'
+                                         rb'([^,"\']*)["\']?\s*,\s*["\']?([^,"\']*)["\']?', output)
             for str1, str2, str3 in replacements:
                 output = output.replace(str1, str1.replace(str2, str3))
-            output = re.sub(rb'\.replace\(\s*/([^)]+)/g?, [\'"]([^\'"]*)[\'"]\)', b'', output)
+            output = regex.sub(rb'\.replace\(\s*/([^)]+)/g?, [\'"]([^\'"]*)[\'"]\)', b'', output)
             if output != text:
                 return output
         return None
 
     def b64decode_str(self, text: bytes) -> Optional[bytes]:
         """ Decode base64 """
-        b64str = re.findall(b'((?:[A-Za-z0-9+/]{3,}={0,2}(?:&#[x1][A0];)?[\r]?[\n]?){6,})', text)
+        b64str = regex.findall(b'((?:[A-Za-z0-9+/]{3,}={0,2}(?:&#[x1][A0];)?[\r]?[\n]?){6,})', text)
         output = text
         for bmatch in b64str:
             s = bmatch.replace(b'\n',
@@ -182,12 +182,12 @@ class DeobfuScripter(ServiceBase):
                                     self.hashes.add(sha256hash)
                                     break
 
-                        if len(set(d)) > 6 and all(8 < c < 127 for c in d) and len(re.sub(rb"\s", b"", d)) > 14:
+                        if len(set(d)) > 6 and all(8 < c < 127 for c in d) and len(regex.sub(rb"\s", b"", d)) > 14:
                             output = output.replace(bmatch, d)
                         else:
                             # Test for ASCII seperated by \x00
                             p = d.replace(b'\x00', b'')
-                            if len(set(p)) > 6 and all(8 < c < 127 for c in p) and len(re.sub(rb"\s", b"", p)) > 14:
+                            if len(set(p)) > 6 and all(8 < c < 127 for c in p) and len(regex.sub(rb"\s", b"", p)) > 14:
                                 output = output.replace(bmatch, p)
 
         if output == text:
@@ -197,13 +197,13 @@ class DeobfuScripter(ServiceBase):
     @staticmethod
     def vars_of_fake_arrays(text: bytes) -> Optional[bytes]:
         """ Parse variables of fake arrays """
-        replacements = re.findall(rb'var\s+([^\s=]+)\s*=\s*\[([^\]]+)\]\[(\d+)\]', text)
+        replacements = regex.findall(rb'var\s+([^\s=]+)\s*=\s*\[([^\]]+)\]\[(\d+)\]', text)
         if len(replacements) > 0:
             #    ,- Make sure we do not process these again
-            output = re.sub(rb'var\s+([^=]+)\s*=', rb'XXX \1 =', text)
+            output = regex.sub(rb'var\s+([^=]+)\s*=', rb'XXX \1 =', text)
             for varname, array, pos in replacements:
                 try:
-                    value = re.split(rb'\s*,\s*', array)[int(pos)]
+                    value = regex.split(rb'\s*,\s*', array)[int(pos)]
                 except IndexError:
                     # print '[' + array + '][' + pos + ']'
                     break
@@ -216,16 +216,16 @@ class DeobfuScripter(ServiceBase):
         """ Replace arrays of strings with the combined string """
         # noinspection PyBroadException
         try:
-            replacements = re.findall(rb'var\s+([^\s=]+)\s*=\s*\[([^\]]+)\]\s*;', text)
+            replacements = regex.findall(rb'var\s+([^\s=]+)\s*=\s*\[([^\]]+)\]\s*;', text)
             if len(replacements) > 0:
                 #    ,- Make sure we do not process these again
                 output = text
                 for varname, values in replacements:
-                    occurences = [int(x) for x in re.findall(varname + rb'\s*\[(\d+)\]', output)]
+                    occurences = [int(x) for x in regex.findall(varname + rb'\s*\[(\d+)\]', output)]
                     for i in occurences:
                         try:
-                            output = re.sub(varname + rb'\s*\[(%d)\]' % i,
-                                        values.split(b',')[i].replace(b'\\', b'\\\\'), output)
+                            output = regex.sub(varname + rb'\s*\[(%d)\]' % i,
+                                               values.split(b',')[i].replace(b'\\', b'\\\\'), output)
                         except IndexError:
                             # print '[' + array + '][' + pos + ']'
                             break
@@ -240,7 +240,7 @@ class DeobfuScripter(ServiceBase):
     def concat_strings(text: bytes) -> Optional[bytes]:
         """ Concatenate disconnected strings """
         # Line continuation character in VB -- '_'
-        output = re.sub(rb'[\'"][\s\n_]*?[+&][\s\n_]*[\'"]', b'', text)
+        output = regex.sub(rb'[\'"][\s\n_]*?[+&][\s\n_]*[\'"]', b'', text)
         if output != text:
             return output
         return None
@@ -250,7 +250,7 @@ class DeobfuScripter(ServiceBase):
         """ Replace StrReverse function calls with the reverse of its argument """
         output = text
         # VBA format StrReverse("[text]")
-        replacements = re.findall(rb'(StrReverse\("(.+?(?="\))))', output)
+        replacements = regex.findall(rb'(StrReverse\("(.+?(?="\))))', output)
         for full, string in replacements:
             reversed_string = full.replace(string, string[::-1]).replace(b"StrReverse(", b"")[:-1]
             output = output.replace(full, reversed_string)
@@ -261,11 +261,11 @@ class DeobfuScripter(ServiceBase):
     @staticmethod
     def powershell_vars(text: bytes) -> Optional[bytes]:
         """ Replace PowerShell variables with their values """
-        replacements_string = re.findall(rb'(\$(?:\w+|{[^\}]+\}))\s*=[^=]\s*[\"\']([^\"\']+)[\"\']', text)
-        replacements_func = re.findall(rb'(\$(?:\w+|{[^\}]+\}))\s*=\s*([^=\"\'\s$]{3,50})[\s]', text)
+        replacements_string = regex.findall(rb'(\$(?:\w+|{[^\}]+\}))\s*=[^=]\s*[\"\']([^\"\']+)[\"\']', text)
+        replacements_func = regex.findall(rb'(\$(?:\w+|{[^\}]+\}))\s*=\s*([^=\"\'\s$]{3,50})[\s]', text)
         if len(replacements_string) > 0 or len(replacements_func) > 0:
             #    ,- Make sure we do not process these again
-            output = re.sub(rb'\$((?:\w+|{[^\}]+\}))\s*=', rb'\$--\1 =', text)
+            output = regex.sub(rb'\$((?:\w+|{[^\}]+\}))\s*=', rb'\$--\1 =', text)
             for varname, string in replacements_string:
                 output = output.replace(varname, string)
             for varname, string in replacements_func:
@@ -278,14 +278,16 @@ class DeobfuScripter(ServiceBase):
     @staticmethod
     def powershell_carets(text: bytes) -> Optional[bytes]:
         """ Remove PowerShell carets """
-        output = text
-        for full in re.findall(rb'"(?:[^"]+[A-Za-z0-9]+\^[A-Za-z0-9]+[^"]+)+"', text):
-            output = output.replace(full, full.replace(b"^", b""))
-        for full in re.findall(rb'"(?:[^"]+[A-Za-z0-9]+`[A-Za-z0-9]+[^"]+)+"', output):
-            output = output.replace(full, full.replace(b"`", b""))
-        if output == text:
-            return None
-        return output
+        if b"^" in text or b"`" in text:
+            output = text
+            for full in regex.findall(rb'"(?:[^"]+[A-Za-z0-9]+\^[A-Za-z0-9]+[^"]+)+"', text):
+                output = output.replace(full, full.replace(b"^", b""))
+            for full in regex.findall(rb'"(?:[^"]+[A-Za-z0-9]+`[A-Za-z0-9]+[^"]+)+"', output):
+                output = output.replace(full, full.replace(b"`", b""))
+            if output == text:
+                return None
+            return output
+        return None
 
     # noinspection PyBroadException
     def msoffice_embedded_script_string(self, text: bytes) -> Optional[bytes]:
@@ -295,7 +297,8 @@ class DeobfuScripter(ServiceBase):
             output = text
             # bad, prevent false var replacements like YG="86"
             # Replace regular variables
-            replacements = re.findall(rb'^(\s*(\w+)\s*=\s*\w*\s*\+?\s(["\'])(.+)["\']\s*\+\s*vbCrLf\s*$)', output, re.M)
+            replacements = regex.findall(
+                rb'^(\s*(\w+)\s*=\s*\w*\s*\+?\s(["\'])(.+)["\']\s*\+\s*vbCrLf\s*$)', output, regex.M)
             if len(replacements) > 0:
                 for full, variable_name, delim, value in replacements:
                     scripts.setdefault(variable_name, [])
@@ -304,7 +307,7 @@ class DeobfuScripter(ServiceBase):
 
             for script_var, script_lines in scripts.items():
                 new_script_name = b'new_script__' + script_var
-                output = re.sub(rb'(.+)\b' + script_var + rb'\b', b'\\1' + new_script_name, output)
+                output = regex.sub(rb'(.+)\b' + script_var + rb'\b', b'\\1' + new_script_name, output)
                 output += b"\n\n\n' ---- script referenced by \"" + new_script_name + b"\" ----\n\n\n"
                 output += b"\n".join(script_lines)
 
@@ -323,14 +326,14 @@ class DeobfuScripter(ServiceBase):
             output = text
             # prevent false var replacements like YG="86"
             # Replace regular variables
-            replacements = re.findall(rb'^\s*((?:Const[\s]*)?(\w+)\s*='
-                                      rb'\s*((?:["][^"]+["]|[\'][^\']+[\']|[0-9]*)))[\s\r]*$',
-                                      output, re.MULTILINE | re.DOTALL)
+            replacements = regex.findall(rb'^\s*((?:Const[\s]*)?(\w+)\s*='
+                                         rb'\s*((?:["][^"]+["]|[\'][^\']+[\']|[0-9]*)))[\s\r]*$',
+                                         output, regex.MULTILINE | regex.DOTALL)
             if len(replacements) > 0:
                 # If one variable is defined more then once take the second definition
                 replacements = [(v[0], k, v[1]) for k, v in {i[1]: (i[0], i[2]) for i in replacements}.items()]
                 for full, varname, value in replacements:
-                    if len(re.findall(rb'\b' + varname + rb'\b', output)) == 1:
+                    if len(regex.findall(rb'\b' + varname + rb'\b', output)) == 1:
                         # If there is only one instance of these, it's probably noise.
                         output = output.replace(full, b'<deobsfuscripter:mswordmacro_unused_variable_assignment>')
                     else:
@@ -339,9 +342,9 @@ class DeobfuScripter(ServiceBase):
                         # b = "he"
                         # b = b & "llo "
                         # b = b & "world!"
-                        stacked = re.findall(rb'^\s*(' + varname + rb'\s*=\s*'
-                                             + varname + rb'\s*[+&]\s*((?:["][^"]+["]|[\'][^\']+[\'])))[\s\r]*$',
-                                             output, re.MULTILINE | re.DOTALL)
+                        stacked = regex.findall(rb'^\s*(' + varname + rb'\s*=\s*'
+                                                + varname + rb'\s*[+&]\s*((?:["][^"]+["]|[\'][^\']+[\'])))[\s\r]*$',
+                                                output, regex.MULTILINE | regex.DOTALL)
                         if len(stacked) > 0:
                             for sfull, val in stacked:
                                 final_val += val.replace(b'"', b"")
@@ -349,17 +352,17 @@ class DeobfuScripter(ServiceBase):
                         output = output.replace(full, b'<deobsfuscripter:mswordmacro_var_assignment>')
                         # If more than a of the variable name left, the assumption is that this did not
                         # work according to plan, so just replace a few for now.
-                        output = re.sub(rb'(\b' + re.escape(varname) +
-                                        rb'(?!\s*(?:=|[+&]\s*' + re.escape(varname) + rb'))\b)',
-                                        b'"' + final_val.replace(b"\\", b"\\\\") + b'"',
-                                        output, count=5)
-                        # output = re.sub(rb'(.*[^\s].*)\b' + varname + rb'\b',
+                        output = regex.sub(rb'(\b' + regex.escape(varname) +
+                                           rb'(?!\s*(?:=|[+&]\s*' + regex.escape(varname) + rb'))\b)',
+                                           b'"' + final_val.replace(b"\\", b"\\\\") + b'"',
+                                           output, count=5)
+                        # output = regex.sub(rb'(.*[^\s].*)\b' + varname + rb'\b',
                         #                 b'\\1"' + final_val.replace(b"\\", b"\\\\") + b'"',
                         #                 output)
 
             # Remaining stacked strings
-            replacements = re.findall(rb'^\s*((\w+)\s*=\s*(\w+)\s*[+&]\s*((?:["][^"]+["]|[\'][^\']+[\'])))[\s\r]*$',
-                                      output, re.MULTILINE | re.DOTALL)
+            replacements = regex.findall(rb'^\s*((\w+)\s*=\s*(\w+)\s*[+&]\s*((?:["][^"]+["]|[\'][^\']+[\'])))[\s\r]*$',
+                                         output, regex.MULTILINE | regex.DOTALL)
             replacements_vars = {x[1] for x in replacements}
             for v in replacements_vars:
                 final_val = b""
@@ -368,10 +371,10 @@ class DeobfuScripter(ServiceBase):
                         continue
                     final_val += value.replace(b'"', b"")
                     output = output.replace(full, b'<deobsfuscripter:mswordmacro_var_assignment>')
-                output = re.sub(rb'(\b' + v +
-                                rb'(?!\s*(?:=|[+&]\s*' + v + rb'))\b)',
-                                b'"' + final_val.replace(b"\\", b"\\\\") + b'"',
-                                output, count=5)
+                output = regex.sub(rb'(\b' + v +
+                                   rb'(?!\s*(?:=|[+&]\s*' + v + rb'))\b)',
+                                   b'"' + final_val.replace(b"\\", b"\\\\") + b'"',
+                                   output, count=5)
 
             if output == text:
                 return None
@@ -383,7 +386,7 @@ class DeobfuScripter(ServiceBase):
 
     def simple_xor_function(self, text: bytes) -> Optional[bytes]:
         """ Tries XORing the text with potential keys found in the text """
-        xorstrings = re.findall(rb'(\w+\("((?:[0-9A-Fa-f][0-9A-Fa-f])+)"\s*,\s*"([^"]+)"\))', text)
+        xorstrings = regex.findall(rb'(\w+\("((?:[0-9A-Fa-f][0-9A-Fa-f])+)"\s*,\s*"([^"]+)"\))', text)
         option_a: List[Tuple[bytes, bytes, bytes, Optional[bytes]]] = []
         option_b: List[Tuple[bytes, bytes, bytes, Optional[bytes]]] = []
         output = text
@@ -429,8 +432,8 @@ class DeobfuScripter(ServiceBase):
     @staticmethod
     def clean_up_final_layer(text: bytes) -> bytes:
         """ Remove deobfuscripter artifacts from final layer for display """
-        output = re.sub(rb'\r', b'', text)
-        output = re.sub(rb'<deobsfuscripter:[^>]+>\n?', b'', output)
+        output = regex.sub(rb'\r', b'', text)
+        output = regex.sub(rb'<deobsfuscripter:[^>]+>\n?', b'', output)
         return output
 
     # noinspection PyBroadException
@@ -504,7 +507,7 @@ class DeobfuScripter(ServiceBase):
 
         # --- Stage 1: Script Extraction --------------------------------------------------------------------------
         for pattern, name, func in code_extracts:
-            if re.match(re.compile(pattern), request.task.file_type):
+            if regex.match(regex.compile(pattern), request.task.file_type):
                 extracted_parts = func(request.file_contents)
                 layer = b"\n".join(extracted_parts).strip()
                 layers_list.append((name, layer))
@@ -556,7 +559,7 @@ class DeobfuScripter(ServiceBase):
                 heur_id = 3
             elif num_layers < 100:
                 heur_id = 4
-            else: # num_layers >= 100
+            else:  # num_layers >= 100
                 heur_id = 5
 
             # Cleanup final layer
