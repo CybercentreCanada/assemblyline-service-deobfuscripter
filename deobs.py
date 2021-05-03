@@ -595,6 +595,8 @@ class DeobfuScripter(ServiceBase):
                     byte_count = 500
                     file_name = f"{os.path.basename(request.file_name)}_decoded_final"
                     file_path = os.path.join(self.working_directory, file_name)
+                    # Ensure directory exists before write
+                    os.makedirs(os.path.dirname(file_path), exist_ok=True)
                     with open(file_path, 'wb+') as f:
                         f.write(clean)
                         self.log.debug(f"Submitted dropped file for analysis: {file_path}")
