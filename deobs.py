@@ -278,14 +278,14 @@ class DeobfuScripter(ServiceBase):
     @staticmethod
     def powershell_carets(text: bytes) -> Optional[bytes]:
         """ Remove PowerShell carets """
-        if b"^" in text or b"`" in text:
-            output = text
-            for full in regex.findall(rb'"(?:[^"]+[A-Za-z0-9]+(\^|`)[A-Za-z0-9]+[^"]+)+"', text):
-                char_to_be_removed = b"^" if b"^" in full else b"`"
-                output = output.replace(full, full.replace(char_to_be_removed, b""))
-            if output == text:
-                return None
-            return output
+        try:
+            if b"^" in text or b"`" in text:
+                output = regex.sub(rb'"(?:[^"]+[A-Za-z0-9]+(\^|`)[A-Za-z0-9]+[^"]+)+"', b"", text, timeout=60)
+                if output == text:
+                    return None
+                return output
+        except TimeoutError:
+            pass
         return None
 
     # noinspection PyBroadException
