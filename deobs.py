@@ -280,7 +280,12 @@ class DeobfuScripter(ServiceBase):
         """ Remove PowerShell carets """
         try:
             if b"^" in text or b"`" in text:
-                output = regex.sub(rb'"(?:[^"]+[A-Za-z0-9]+(\^|`)[A-Za-z0-9]+[^"]+)+"', b"", text, timeout=60)
+                output = text
+                for full in regex.findall(rb'"(?:[^"]+[A-Za-z0-9]+(\^|`)[A-Za-z0-9]+[^"]+)+"', text, timeout=60):
+                    if isinstance(full, tuple):
+                        full = full[0]
+                    char_to_be_removed = b"^" if b"^" in full else b"`"
+                    output = output.replace(full, full.replace(char_to_be_removed, b""))
                 if output == text:
                     return None
                 return output
