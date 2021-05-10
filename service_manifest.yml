@@ -9,7 +9,7 @@ stage: CORE
 category: Static Analysis
 
 file_required: true
-timeout: 150
+timeout: 600
 disable_cache: false
 
 enabled: true
