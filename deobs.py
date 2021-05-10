@@ -6,6 +6,7 @@ import os
 import regex
 
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, List, Optional, Set, Tuple
 
 import magic
@@ -278,14 +279,19 @@ class DeobfuScripter(ServiceBase):
     @staticmethod
     def powershell_carets(text: bytes) -> Optional[bytes]:
         """ Remove PowerShell carets """
-        if b"^" in text or b"`" in text:
-            output = text
-            for full in regex.findall(rb'"(?:[^"]+[A-Za-z0-9]+(\^|`)[A-Za-z0-9]+[^"]+)+"', text):
-                char_to_be_removed = b"^" if b"^" in full else b"`"
-                output = output.replace(full, full.replace(char_to_be_removed, b""))
-            if output == text:
-                return None
-            return output
+        try:
+            if b"^" in text or b"`" in text:
+                output = text
+                for full in regex.findall(rb'"(?:[^"]+[A-Za-z0-9]+(\^|`)[A-Za-z0-9]+[^"]+)+"', text):
+                    if isinstance(full, tuple):
+                        full = full[0]
+                    char_to_be_removed = b"^" if b"^" in full else b"`"
+                    output = output.replace(full, full.replace(char_to_be_removed, b""))
+                if output == text:
+                    return None
+                return output
+        except TimeoutError:
+            pass
         return None
 
     # noinspection PyBroadException
@@ -524,20 +530,26 @@ class DeobfuScripter(ServiceBase):
                     if res:
                         layers_list.append((name, res))
                 break
-            for name, technique in techniques:
-                res = technique(layer)
-                if res:
-                    layers_list.append((name, res))
-                    # Looks like it worked, restart with new layer
-                    layer = res
+            with ThreadPoolExecutor() as executor:
+                threads = [executor.submit(technique, layer) for name, technique in techniques]
+                results = [thread.result() for thread in threads]
+                for i in range(len(results)):
+                    result = results[i]
+                    if result:
+                        layers_list.append((techniques[i][0], result))
+                        # Looks like it worked, restart with new layer
+                        layer = result
             # If the layers haven't changed in a passing, break
             if layers_count == len(layers_list):
                 if len(techniques) != first_pass_len:
                     final_pass.extend(techniques)
-                    for name, technique in final_pass:
-                        res = technique(layer)
-                        if res:
-                            layers_list.append((name, res))
+                    with ThreadPoolExecutor() as executor:
+                        threads = [executor.submit(technique, layer) for name, technique in final_pass]
+                        results = [thread.result() for thread in threads]
+                        for i in range(len(results)):
+                            result = results[i]
+                            if result:
+                                layers_list.append((techniques[i][0], result))
                     break
                 for x in second_pass:
                     techniques.insert(0, x)
