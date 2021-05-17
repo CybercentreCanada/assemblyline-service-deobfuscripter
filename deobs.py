@@ -282,7 +282,7 @@ class DeobfuScripter(ServiceBase):
         try:
             if b"^" in text or b"`" in text:
                 output = text
-                for full in regex.findall(rb'"(?:[^"]+[A-Za-z0-9]+(\^|`)[A-Za-z0-9]+[^"]+)+"', text):
+                for full in regex.findall(rb'"[^"]+[A-Za-z0-9]+(\^|`)+[A-Za-z0-9]+[^"]+"', text):
                     if isinstance(full, tuple):
                         full = full[0]
                     char_to_be_removed = b"^" if b"^" in full else b"`"
