@@ -16,7 +16,7 @@ from bs4 import BeautifulSoup
 from assemblyline.common.str_utils import safe_str
 from assemblyline_v4_service.common.balbuzard.patterns import PatternMatch
 from assemblyline_v4_service.common.base import ServiceBase
-from assemblyline_v4_service.common.request import ServiceRequest
+from assemblyline_v4_service.common.request import ServiceRequest, MaxExtractedExceeded
 from assemblyline_v4_service.common.result import Result, ResultSection, BODY_FORMAT, Heuristic
 
 
@@ -639,4 +639,8 @@ class DeobfuScripter(ServiceBase):
                     for extracted in self.files_extracted:
                         file_name = os.path.basename(extracted)
                         ext_file_res.add_line(file_name)
-                        request.add_extracted(extracted, file_name, "File of interest deobfuscated from sample")
+                        try:
+                            request.add_extracted(extracted, file_name, "File of interest deobfuscated from sample")
+                        except MaxExtractedExceeded:
+                            self.log.warning('Extraction limit exceeded while adding files of interest.')
+                            break
