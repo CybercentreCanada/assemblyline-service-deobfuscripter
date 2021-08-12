@@ -592,16 +592,16 @@ class DeobfuScripter(ServiceBase):
                             diff_tags.setdefault(ioc_type, [])
                             diff_tags[ioc_type].append(ioc)
                 # And for new reversed IOCs
-                rev_values = patterns.ioc_match(reversed(clean), bogon_ip=True, just_network=False)
+                rev_values = patterns.ioc_match(clean[::-1], bogon_ip=True, just_network=False)
                 rev_tags: Dict[str, List[bytes]] = {}
-                reversed_file = reversed(request.file_contents)
+                reversed_file = request.file_contents[::-1]
                 for ioc_type, iocs in rev_values.items():
                     for ioc in iocs:
                         if ioc_type == 'network.static.uri' \
                                 and ioc.split(b'?', 1)[0] not in reversed_file:
                             rev_tags.setdefault(ioc_type, [])
                             rev_tags[ioc_type].append(ioc)
-                        elif ioc not in reversed_file and reversed(ioc) not in diff_tags[ioc_type]:
+                        elif ioc not in reversed_file and ioc[::-1] not in diff_tags.get(ioc_type, []):
                             rev_tags.setdefault(ioc_type, [])
                             rev_tags[ioc_type].append(ioc)
 
