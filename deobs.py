@@ -3,17 +3,20 @@
 import binascii
 import hashlib
 import os
-import regex
 
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
+from itertools import chain
 from typing import Dict, List, Optional, Set, Tuple
 
+
 import magic
+import regex
 
 from bs4 import BeautifulSoup
 
 from assemblyline.common.str_utils import safe_str
+from assemblyline.odm.base import URI
 from assemblyline_v4_service.common.balbuzard.patterns import PatternMatch
 from assemblyline_v4_service.common.base import ServiceBase
 from assemblyline_v4_service.common.request import ServiceRequest, MaxExtractedExceeded
@@ -579,15 +582,30 @@ class DeobfuScripter(ServiceBase):
                 # Check for new IOCs
                 pat_values = patterns.ioc_match(clean, bogon_ip=True, just_network=False)
                 diff_tags: Dict[str, List[bytes]] = {}
+                for ioc_type, iocs in pat_values.items():
+                    for ioc in iocs:
+                        if ioc_type == 'network.static.uri' \
+                                and ioc.split(b'?', 1)[0] not in request.file_contents:
+                            diff_tags.setdefault(ioc_type, [])
+                            diff_tags[ioc_type].append(ioc)
+                        elif ioc not in request.file_contents:
+                            diff_tags.setdefault(ioc_type, [])
+                            diff_tags[ioc_type].append(ioc)
+                # And for new reversed IOCs
+                rev_values = patterns.ioc_match(clean[::-1], bogon_ip=True, just_network=False)
+                rev_tags: Dict[str, List[bytes]] = {}
+                reversed_file = request.file_contents[::-1]
+                for ioc_type, iocs in rev_values.items():
+                    for ioc in iocs:
+                        if ioc_type == 'network.static.uri' \
+                                and ioc.split(b'?', 1)[0] not in reversed_file:
+                            rev_tags.setdefault(ioc_type, [])
+                            rev_tags[ioc_type].append(ioc)
+                        elif ioc not in reversed_file and ioc[::-1] not in diff_tags.get(ioc_type, []):
+                            rev_tags.setdefault(ioc_type, [])
+                            rev_tags[ioc_type].append(ioc)
 
-                for uri in pat_values.get('network.static.uri', []):
-                    # Compare URIs without query string
-                    uri = uri.split(b'?', 1)[0]
-                    if uri not in request.file_contents:
-                        diff_tags.setdefault('network.static.uri', [])
-                        diff_tags['network.static.uri'].append(uri)
-
-                if request.deep_scan or (len(clean) > 1000 and heur_id >= 4) or diff_tags:
+                if request.deep_scan or (len(clean) > 1000 and heur_id >= 4) or diff_tags or rev_tags:
                     extract_file = True
 
                 # Display obfuscation steps
@@ -617,14 +635,14 @@ class DeobfuScripter(ServiceBase):
                               body_format=BODY_FORMAT.MEMORY_DUMP, parent=request.result)
 
                 # Display new IOCs from final layer
-                if len(diff_tags) > 0:
+                if diff_tags or rev_tags:
                     ioc_new = ResultSection("New IOCs found after de-obfustcation", parent=request.result,
                                             body_format=BODY_FORMAT.MEMORY_DUMP)
                     has_network_heur = False
-                    for ty, val in diff_tags.items():
+                    for ty, val in chain(diff_tags.items(), rev_tags.items()):
+                        if "network" in ty:
+                            has_network_heur = True
                         for v in val:
-                            if "network" in ty:
-                                has_network_heur = True
                             ioc_new.add_line(f"Found {ty.upper().replace('.', ' ')}: {safe_str(v)}")
                             ioc_new.add_tag(ty, v)
 
