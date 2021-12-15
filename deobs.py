@@ -585,7 +585,7 @@ class DeobfuScripter(ServiceBase):
                 for ioc_type, iocs in pat_values.items():
                     for ioc in iocs:
                         if ioc_type == 'network.static.uri' \
-                                and ioc.split(b'?', 1)[0] not in request.file_contents:
+                                and ioc.split(b'?', 1)[0].split(b'_meeting') not in request.file_contents:
                             diff_tags.setdefault(ioc_type, [])
                             diff_tags[ioc_type].append(ioc)
                         elif ioc not in request.file_contents:
