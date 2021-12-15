@@ -640,7 +640,7 @@ class DeobfuScripter(ServiceBase):
                                             body_format=BODY_FORMAT.MEMORY_DUMP)
                     has_network_heur = False
                     for ty, val in chain(diff_tags.items(), rev_tags.items()):
-                        if "network" in ty:
+                        if "network" in ty and ty != 'network.static.domain':
                             has_network_heur = True
                         for v in val:
                             ioc_new.add_line(f"Found {ty.upper().replace('.', ' ')}: {safe_str(v)}")
