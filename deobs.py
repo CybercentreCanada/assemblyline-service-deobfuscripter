@@ -122,6 +122,16 @@ class DeobfuScripter(ServiceBase):
         return output
 
     @staticmethod
+    def xml_unescape(text: bytes) -> Optional[bytes]:
+        """ Replace XML escape sequences with the corresponding character """
+        output = text
+        for hex in regex.findall(rb'(?i)&#x[a-z0-9]{2};', text):
+            output = output.replace(hex, binascii.unhexlify(hex[3:-1]))
+        for escape in regex.findall(rb'&#(?:25[0-5]|2[0-4][0-9]|[0-1]?[0-9]{1,2});', text):
+            output = output.replace(escape, int(escape[2:-1]).to_bytes(1, 'big'))
+        return output if output != text else None
+
+    @staticmethod
     def string_replace(text: bytes) -> Optional[bytes]:
         """ Replace calls to replace() with their output """
         if b'replace(' in text.lower():
@@ -500,7 +510,8 @@ class DeobfuScripter(ServiceBase):
             ('Concat strings', self.concat_strings),
             ('MSWord macro vars', self.mswordmacro_vars),
             ('Powershell vars', self.powershell_vars),
-            ('Charcode hex', self.charcode_hex)
+            ('Charcode hex', self.charcode_hex),
+            ('XML unescape', self.xml_unescape)
         ]
         final_pass = [
             ('Charcode', self.charcode),
