@@ -295,7 +295,7 @@ class DeobfuScripter(ServiceBase):
         try:
             if b"^" in text or b"`" in text:
                 output = text
-                for full in regex.findall(rb'"[^"]+[A-Za-z0-9]+(\^|`)+[A-Za-z0-9]+[^"]+"', text):
+                for full in regex.findall(rb'"[^"]+[A-Za-z0-9](\^|`)+[A-Za-z0-9][^"]+"', text):
                     if isinstance(full, tuple):
                         full = full[0]
                     char_to_be_removed = b"^" if b"^" in full else b"`"
@@ -547,8 +547,7 @@ class DeobfuScripter(ServiceBase):
             with ThreadPoolExecutor() as executor:
                 threads = [executor.submit(technique, layer) for name, technique in techniques]
                 results = [thread.result() for thread in threads]
-                for i in range(len(results)):
-                    result = results[i]
+                for i, result in enumerate(results):
                     if result:
                         layers_list.append((techniques[i][0], result))
                         # Looks like it worked, restart with new layer
