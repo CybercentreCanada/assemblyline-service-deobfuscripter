@@ -1,5 +1,7 @@
 """ DeobfuScripter: Script Deobfuscation Service """
 
+from __future__ import annotations
+
 import binascii
 import hashlib
 import os
@@ -7,7 +9,7 @@ import os
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from itertools import chain
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Callable, Dict, List, Optional, Set, Tuple
 
 
 import magic
@@ -495,7 +497,8 @@ class DeobfuScripter(ServiceBase):
                         ioc_res.add_tag(k, v)
 
         # --- Prepare Techniques ----------------------------------------------------------------------------------
-        techniques = [
+        TechniqueList = list[tuple[str, Callable[[bytes], Optional[bytes]]]]
+        techniques: TechniqueList = [
             ('MSOffice Embedded script', self.msoffice_embedded_script_string),
             ('CHR and CHRB decode', self.chr_decode),
             ('String replace', self.string_replace),
@@ -506,14 +509,14 @@ class DeobfuScripter(ServiceBase):
             ('B64 Decode', self.b64decode_str),
             ('Simple XOR function', self.simple_xor_function),
         ]
-        second_pass = [
+        second_pass: TechniqueList = [
             ('Concat strings', self.concat_strings),
             ('MSWord macro vars', self.mswordmacro_vars),
             ('Powershell vars', self.powershell_vars),
             ('Charcode hex', self.charcode_hex),
             ('XML unescape', self.xml_unescape)
         ]
-        final_pass = [
+        final_pass: TechniqueList = [
             ('Charcode', self.charcode),
         ]
 
@@ -595,7 +598,7 @@ class DeobfuScripter(ServiceBase):
                 for ioc_type, iocs in pat_values.items():
                     for ioc in iocs:
                         if ioc_type == 'network.static.uri' \
-                                and ioc.split(b'?', 1)[0].split(b'_meeting', 1)[0] not in request.file_contents:
+                                and b''.join(ioc.split(b'/', 3)[:3]) not in request.file_contents:
                             diff_tags.setdefault(ioc_type, [])
                             diff_tags[ioc_type].append(ioc)
                         elif ioc not in request.file_contents:
@@ -608,7 +611,7 @@ class DeobfuScripter(ServiceBase):
                 for ioc_type, iocs in rev_values.items():
                     for ioc in iocs:
                         if ioc_type == 'network.static.uri' \
-                                and ioc.split(b'?', 1)[0] not in reversed_file:
+                                and b''.join(ioc.split(b'/', 3)[:3]) not in reversed_file:
                             rev_tags.setdefault(ioc_type, [])
                             rev_tags[ioc_type].append(ioc)
                         elif ioc not in reversed_file and ioc[::-1] not in diff_tags.get(ioc_type, []):
