@@ -597,10 +597,10 @@ class DeobfuScripter(ServiceBase):
                 diff_tags: Dict[str, List[bytes]] = {}
                 for ioc_type, iocs in pat_values.items():
                     for ioc in iocs:
-                        if ioc_type == 'network.static.uri' \
-                                and b''.join(ioc.split(b'/', 3)[:3]) not in request.file_contents:
-                            diff_tags.setdefault(ioc_type, [])
-                            diff_tags[ioc_type].append(ioc)
+                        if ioc_type == 'network.static.uri':
+                            if b''.join(ioc.split(b'/', 3)[:3]) not in request.file_contents:
+                                diff_tags.setdefault(ioc_type, [])
+                                diff_tags[ioc_type].append(ioc)
                         elif ioc not in request.file_contents:
                             diff_tags.setdefault(ioc_type, [])
                             diff_tags[ioc_type].append(ioc)
@@ -610,10 +610,10 @@ class DeobfuScripter(ServiceBase):
                 reversed_file = request.file_contents[::-1]
                 for ioc_type, iocs in rev_values.items():
                     for ioc in iocs:
-                        if ioc_type == 'network.static.uri' \
-                                and b''.join(ioc.split(b'/', 3)[:3]) not in reversed_file:
-                            rev_tags.setdefault(ioc_type, [])
-                            rev_tags[ioc_type].append(ioc)
+                        if ioc_type == 'network.static.uri':
+                            if b''.join(ioc.split(b'/', 3)[:3]) not in reversed_file:
+                                rev_tags.setdefault(ioc_type, [])
+                                rev_tags[ioc_type].append(ioc)
                         elif ioc not in reversed_file and ioc[::-1] not in diff_tags.get(ioc_type, []):
                             rev_tags.setdefault(ioc_type, [])
                             rev_tags[ioc_type].append(ioc)
