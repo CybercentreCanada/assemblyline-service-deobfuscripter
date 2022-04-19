@@ -669,9 +669,10 @@ class DeobfuScripter(ServiceBase):
                                                  heuristic=Heuristic(8), parent=request.result)
                     for extracted in self.files_extracted:
                         file_name = os.path.basename(extracted)
-                        ext_file_res.add_line(file_name)
                         try:
-                            request.add_extracted(extracted, file_name, "File of interest deobfuscated from sample")
+                            if request.add_extracted(extracted, file_name, "File of interest deobfuscated from sample",
+                                                     safelist_interface=self.api_interface):
+                                ext_file_res.add_line(file_name)
                         except MaxExtractedExceeded:
                             self.log.warning('Extraction limit exceeded while adding files of interest.')
                             break
