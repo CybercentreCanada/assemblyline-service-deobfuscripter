@@ -23,35 +23,12 @@ submission_params:
     value: false
 
 heuristics:
-  - description: Only a few de-obfuscation attemp needed to deobfuscate the file
+  - description: Obfuscation techniques were found and deobfuscated in the file
     filetype: code/.*
     heur_id: 1
-    name: Simple obfuscation
+    name: obfuscation
     score: 10
-
-  - description: The service attempted between 5 and 10 de-obfuscation attemps
-    filetype: code/.*
-    heur_id: 2
-    name: Light obfuscation
-    score: 50
-
-  - description: The service attempted between 10 and 50 de-obfuscation attemps
-    filetype: code/.*
-    heur_id: 3
-    name: Medium obfuscation
-    score: 100
-
-  - description: The service attempted between 50 and 100 de-obfuscation attemps
-    filetype: code/.*
-    heur_id: 4
-    name: Very high obfuscation
-    score: 500
-
-  - description: The service attempted more than a 100 de-obfuscation attemps
-    filetype: code/.*
-    heur_id: 5
-    name: Extreme obfuscation
-    score: 1000
+    max_score: 1000
 
   - description: IOCs where found only after de-obfuscation
     filetype: code/.*

@@ -557,106 +557,94 @@ class DeobfuScripter(ServiceBase):
                 layer = res
 
         # --- Compiling results -----------------------------------------------------------------------------------
-        if len(layers_list) > 0:
-            extract_file = False
-            num_layers = len(layers_list)
+        if not layers_list:
+            return
+        # Cleanup final layer
+        clean = self.clean_up_final_layer(layer)
+        if clean == request.file_contents:
+            return
 
-            # Compute heuristic
-            if num_layers < 5:
-                heur_id = 1
-            elif num_layers < 10:
-                heur_id = 2
-            elif num_layers < 50:
-                heur_id = 3
-            elif num_layers < 100:
-                heur_id = 4
-            else:  # num_layers >= 100
-                heur_id = 5
+        # Display obfuscation steps
+        heuristic = Heuristic(1)
+        mres = ResultSection("De-obfuscation steps taken by DeobsfuScripter",
+                             parent=request.result,
+                             heuristic=heuristic)
 
-            # Cleanup final layer
-            clean = self.clean_up_final_layer(layer)
-            if clean != request.file_contents:
-                # Check for new IOCs
-                pat_values = patterns.ioc_match(clean, bogon_ip=True, just_network=False)
-                diff_tags: Dict[str, List[bytes]] = {}
-                for ioc_type, iocs in pat_values.items():
-                    for ioc in iocs:
-                        if ioc_type == 'network.static.uri':
-                            if b'/'.join(ioc.split(b'/', 3)[:3]) not in request.file_contents:
-                                diff_tags.setdefault(ioc_type, [])
-                                diff_tags[ioc_type].append(ioc)
-                        elif ioc not in request.file_contents:
-                            diff_tags.setdefault(ioc_type, [])
-                            diff_tags[ioc_type].append(ioc)
-                # And for new reversed IOCs
-                rev_values = patterns.ioc_match(clean[::-1], bogon_ip=True, just_network=False)
-                rev_tags: Dict[str, List[bytes]] = {}
-                reversed_file = request.file_contents[::-1]
-                for ioc_type, iocs in rev_values.items():
-                    for ioc in iocs:
-                        if ioc_type == 'network.static.uri':
-                            if b'/'.join(ioc.split(b'/', 3)[:3]) not in reversed_file:
-                                rev_tags.setdefault(ioc_type, [])
-                                rev_tags[ioc_type].append(ioc)
-                        elif ioc not in reversed_file and ioc[::-1] not in diff_tags.get(ioc_type, []):
-                            rev_tags.setdefault(ioc_type, [])
-                            rev_tags[ioc_type].append(ioc)
+        tech_count = Counter(layers_list)
+        for tech, count in tech_count.items():
+            heuristic.add_signature_id(tech, frequency=count)
+            mres.add_line(f"{tech}, {count} time(s).")
 
-                if request.deep_scan or (len(clean) > 1000 and heur_id >= 4) or diff_tags or rev_tags:
-                    extract_file = True
+        # Check for new IOCs
+        pat_values = patterns.ioc_match(clean, bogon_ip=True, just_network=False)
+        diff_tags: Dict[str, List[bytes]] = {}
+        for ioc_type, iocs in pat_values.items():
+            for ioc in iocs:
+                if ioc_type == 'network.static.uri':
+                    if b'/'.join(ioc.split(b'/', 3)[:3]) not in request.file_contents:
+                        diff_tags.setdefault(ioc_type, [])
+                        diff_tags[ioc_type].append(ioc)
+                elif ioc not in request.file_contents:
+                    diff_tags.setdefault(ioc_type, [])
+                    diff_tags[ioc_type].append(ioc)
 
-                # Display obfuscation steps
-                mres = ResultSection("De-obfuscation steps taken by DeobsfuScripter", parent=request.result)
-                if heur_id:
-                    mres.set_heuristic(heur_id)
+        # And for new reversed IOCs
+        rev_values = patterns.ioc_match(clean[::-1], bogon_ip=True, just_network=False)
+        rev_tags: Dict[str, List[bytes]] = {}
+        reversed_file = request.file_contents[::-1]
+        for ioc_type, iocs in rev_values.items():
+            for ioc in iocs:
+                if ioc_type == 'network.static.uri':
+                    if b'/'.join(ioc.split(b'/', 3)[:3]) not in reversed_file:
+                        rev_tags.setdefault(ioc_type, [])
+                        rev_tags[ioc_type].append(ioc)
+                elif ioc not in reversed_file and ioc[::-1] not in diff_tags.get(ioc_type, []):
+                    rev_tags.setdefault(ioc_type, [])
+                    rev_tags[ioc_type].append(ioc)
 
-                tech_count = Counter(layers_list)
-                for tech, count in tech_count.items():
-                    mres.add_line(f"{tech}, {count} time(s).")
+        # Display final layer
+        byte_count = 5000
+        if request.deep_scan or (len(clean) > 1000 and heuristic.score >= 500) or diff_tags or rev_tags:
+            # Save extracted file
+            byte_count = 500
+            file_name = f"{os.path.basename(request.file_name)}_decoded_final"
+            file_path = os.path.join(self.working_directory, file_name)
+            # Ensure directory exists before write
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            with open(file_path, 'wb+') as f:
+                f.write(clean)
+                self.log.debug(f"Submitted dropped file for analysis: {file_path}")
+            request.add_extracted(file_path, file_name, "Final deobfuscation layer")
 
-                # Display final layer
-                byte_count = 5000
-                if extract_file:
-                    # Save extracted file
-                    byte_count = 500
-                    file_name = f"{os.path.basename(request.file_name)}_decoded_final"
-                    file_path = os.path.join(self.working_directory, file_name)
-                    # Ensure directory exists before write
-                    os.makedirs(os.path.dirname(file_path), exist_ok=True)
-                    with open(file_path, 'wb+') as f:
-                        f.write(clean)
-                        self.log.debug(f"Submitted dropped file for analysis: {file_path}")
-                    request.add_extracted(file_path, file_name, "Final deobfuscation layer")
+        ResultSection(f"First {byte_count} bytes of the final layer:", body=safe_str(clean[:byte_count]),
+                      body_format=BODY_FORMAT.MEMORY_DUMP, parent=request.result)
 
-                ResultSection(f"First {byte_count} bytes of the final layer:", body=safe_str(clean[:byte_count]),
-                              body_format=BODY_FORMAT.MEMORY_DUMP, parent=request.result)
+        # Display new IOCs from final layer
+        if diff_tags or rev_tags:
+            ioc_new = ResultSection("New IOCs found after de-obfustcation", parent=request.result,
+                                    body_format=BODY_FORMAT.MEMORY_DUMP)
+            has_network_heur = False
+            for ty, val in chain(diff_tags.items(), rev_tags.items()):
+                if "network" in ty and ty != 'network.static.domain':
+                    has_network_heur = True
+                for v in val:
+                    ioc_new.add_line(f"Found {ty.upper().replace('.', ' ')}: {safe_str(v)}")
+                    ioc_new.add_tag(ty, v)
 
-                # Display new IOCs from final layer
-                if diff_tags or rev_tags:
-                    ioc_new = ResultSection("New IOCs found after de-obfustcation", parent=request.result,
-                                            body_format=BODY_FORMAT.MEMORY_DUMP)
-                    has_network_heur = False
-                    for ty, val in chain(diff_tags.items(), rev_tags.items()):
-                        if "network" in ty and ty != 'network.static.domain':
-                            has_network_heur = True
-                        for v in val:
-                            ioc_new.add_line(f"Found {ty.upper().replace('.', ' ')}: {safe_str(v)}")
-                            ioc_new.add_tag(ty, v)
+            if has_network_heur:
+                ioc_new.set_heuristic(7)
+            else:
+                ioc_new.set_heuristic(6)
 
-                    if has_network_heur:
-                        ioc_new.set_heuristic(7)
-                    else:
-                        ioc_new.set_heuristic(6)
-
-                if len(self.files_extracted) > 0:
-                    ext_file_res = ResultSection("The following files were extracted during the deobfuscation",
-                                                 heuristic=Heuristic(8), parent=request.result)
-                    for extracted in self.files_extracted:
-                        file_name = os.path.basename(extracted)
-                        try:
-                            if request.add_extracted(extracted, file_name, "File of interest deobfuscated from sample",
-                                                     safelist_interface=self.api_interface):
-                                ext_file_res.add_line(file_name)
-                        except MaxExtractedExceeded:
-                            self.log.warning('Extraction limit exceeded while adding files of interest.')
-                            break
+        if len(self.files_extracted) > 0:
+            ext_file_res = ResultSection("The following files were extracted during the deobfuscation",
+                                         heuristic=Heuristic(8), parent=request.result)
+            for extracted in self.files_extracted:
+                file_name = os.path.basename(extracted)
+                try:
+                    if request.add_extracted(extracted, file_name, "File of interest deobfuscated from sample",
+                                             safelist_interface=self.api_interface):
+                        ext_file_res.add_line(file_name)
+                except MaxExtractedExceeded:
+                    self.log.warning('Extraction limit exceeded while adding files of interest.')
+                    break
