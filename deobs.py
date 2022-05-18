@@ -494,8 +494,8 @@ class DeobfuScripter(ServiceBase):
                         ioc_res.add_tag(k, v)
 
         # --- Prepare Techniques ----------------------------------------------------------------------------------
-        TechniqueList = list[tuple[str, Callable[[bytes], Optional[bytes]]]]
-        techniques: TechniqueList = [
+        TechniqueList = List[Tuple[str, Callable[[bytes], Optional[bytes]]]]
+        first_pass: TechniqueList = [
             ('MSOffice Embedded script', self.msoffice_embedded_script_string),
             ('CHR and CHRB decode', self.chr_decode),
             ('String replace', self.string_replace),
@@ -513,6 +513,7 @@ class DeobfuScripter(ServiceBase):
             ('Charcode hex', self.charcode_hex),
             ('XML unescape', self.xml_unescape)
         ]
+        second_pass.extend(first_pass)
         final_pass: TechniqueList = [
             ('Charcode', self.charcode),
         ]
@@ -533,7 +534,7 @@ class DeobfuScripter(ServiceBase):
                 break
 
         # --- Stage 2: Deobsfucation ------------------------------------------------------------------------------
-        first_pass_len = len(techniques)
+        techniques = first_pass
         layers_count = len(layers_list)
         for _ in range(max_attempts):
             for name, technique in techniques:
@@ -542,12 +543,12 @@ class DeobfuScripter(ServiceBase):
                     layers_list.append((name, result))
                     # Looks like it worked, restart with new layer
                     layer = result
-            # If the layers haven't changed in a passing, break
+            # If there are no new layers in a pass, start second pass or break
             if layers_count == len(layers_list):
-                if len(techniques) != first_pass_len:
+                if len(techniques) != len(first_pass):
+                    # Already on second pass
                     break
-                for x in second_pass:
-                    techniques.insert(0, x)
+                techniques = second_pass
             layers_count = len(layers_list)
 
         # --- Final Layer -----------------------------------------------------------------------------------------
@@ -556,6 +557,7 @@ class DeobfuScripter(ServiceBase):
             res = technique(layer)
             if res:
                 layers_list.append((name, res))
+                layer = res
 
         # --- Compiling results -----------------------------------------------------------------------------------
         if len(layers_list) > 0:
