@@ -7,10 +7,8 @@ import hashlib
 import os
 
 from collections import Counter
-from concurrent.futures import ThreadPoolExecutor
 from itertools import chain
 from typing import Callable, Dict, List, Optional, Set, Tuple
-
 
 import magic
 import regex
@@ -18,7 +16,6 @@ import regex
 from bs4 import BeautifulSoup
 
 from assemblyline.common.str_utils import safe_str
-from assemblyline.odm.base import URI
 from assemblyline_v4_service.common.balbuzard.patterns import PatternMatch
 from assemblyline_v4_service.common.base import ServiceBase
 from assemblyline_v4_service.common.request import ServiceRequest, MaxExtractedExceeded
@@ -539,14 +536,12 @@ class DeobfuScripter(ServiceBase):
         first_pass_len = len(techniques)
         layers_count = len(layers_list)
         for _ in range(max_attempts):
-            with ThreadPoolExecutor() as executor:
-                threads = [executor.submit(technique, layer) for name, technique in techniques]
-                results = [thread.result() for thread in threads]
-                for i, result in enumerate(results):
-                    if result:
-                        layers_list.append((techniques[i][0], result))
-                        # Looks like it worked, restart with new layer
-                        layer = result
+            for name, technique in techniques:
+                result = technique(layer)
+                if result:
+                    layers_list.append((name, result))
+                    # Looks like it worked, restart with new layer
+                    layer = result
             # If the layers haven't changed in a passing, break
             if layers_count == len(layers_list):
                 if len(techniques) != first_pass_len:
