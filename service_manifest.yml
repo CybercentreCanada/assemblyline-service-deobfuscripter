@@ -26,7 +26,7 @@ heuristics:
   - description: Obfuscation techniques were found and deobfuscated in the file
     filetype: code/.*
     heur_id: 1
-    name: obfuscation
+    name: Obfuscation
     score: 10
     max_score: 1000
 
