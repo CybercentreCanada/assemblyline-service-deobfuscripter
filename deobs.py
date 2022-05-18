@@ -522,7 +522,7 @@ class DeobfuScripter(ServiceBase):
             ('.*html.*', "HTML scripts extraction", self.extract_htmlscript)
         ]
 
-        layers_list: List[Tuple[str, bytes]] = []
+        layers_list: list[str] = []
         layer = request.file_contents
 
         # --- Stage 1: Script Extraction --------------------------------------------------------------------------
@@ -530,7 +530,7 @@ class DeobfuScripter(ServiceBase):
             if regex.match(regex.compile(pattern), request.task.file_type):
                 extracted_parts = func(request.file_contents)
                 layer = b"\n".join(extracted_parts).strip()
-                layers_list.append((name, layer))
+                layers_list.append(name)
                 break
 
         # --- Stage 2: Deobsfucation ------------------------------------------------------------------------------
@@ -540,7 +540,7 @@ class DeobfuScripter(ServiceBase):
             for name, technique in techniques:
                 result = technique(layer)
                 if result:
-                    layers_list.append((name, result))
+                    layers_list.append(name)
                     # Looks like it worked, restart with new layer
                     layer = result
             # If there are no new layers in a pass, start second pass or break
@@ -556,7 +556,7 @@ class DeobfuScripter(ServiceBase):
         for name, technique in final_pass:
             res = technique(layer)
             if res:
-                layers_list.append((name, res))
+                layers_list.append(name)
                 layer = res
 
         # --- Compiling results -----------------------------------------------------------------------------------
@@ -577,7 +577,7 @@ class DeobfuScripter(ServiceBase):
                 heur_id = 5
 
             # Cleanup final layer
-            clean = self.clean_up_final_layer(layers_list[-1][1])
+            clean = self.clean_up_final_layer(layer)
             if clean != request.file_contents:
                 # Check for new IOCs
                 pat_values = patterns.ioc_match(clean, bogon_ip=True, just_network=False)
