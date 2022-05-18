@@ -473,10 +473,7 @@ class DeobfuScripter(ServiceBase):
         request.result = Result()
         patterns = PatternMatch()
 
-        if request.deep_scan:
-            max_attempts = 100
-        else:
-            max_attempts = 10
+        max_attempts = 100 if request.deep_scan else 10
 
         self.files_extracted = set()
         self.hashes = set()
@@ -613,9 +610,9 @@ class DeobfuScripter(ServiceBase):
                 if heur_id:
                     mres.set_heuristic(heur_id)
 
-                lcount = Counter([x[0] for x in layers_list])
-                for l, c in lcount.items():
-                    mres.add_line(f"{l}, {c} time(s).")
+                tech_count = Counter(layers_list)
+                for tech, count in tech_count.items():
+                    mres.add_line(f"{tech}, {count} time(s).")
 
                 # Display final layer
                 byte_count = 5000
