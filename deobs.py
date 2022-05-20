@@ -478,18 +478,6 @@ class DeobfuScripter(ServiceBase):
         self.files_extracted = set()
         self.hashes = set()
 
-        # --- Pre-Processing --------------------------------------------------------------------------------------
-        # Get all IOCs prior to de-obfuscation
-        pat_values = patterns.ioc_match(request.file_contents, bogon_ip=True, just_network=False)
-        if pat_values and request.get_param('extract_original_iocs'):
-            ioc_res = ResultSection("The following IOCs were found in the original file", parent=request.result,
-                                    body_format=BODY_FORMAT.MEMORY_DUMP)
-            for k, val in pat_values.items():
-                for v in val:
-                    if ioc_res:
-                        ioc_res.add_line(f"Found {k.upper().replace('.', ' ')}: {safe_str(v)}")
-                        ioc_res.add_tag(k, v)
-
         # --- Prepare Techniques ----------------------------------------------------------------------------------
         TechniqueList = List[Tuple[str, Callable[[bytes], Optional[bytes]]]]
         first_pass: TechniqueList = [
@@ -529,6 +517,8 @@ class DeobfuScripter(ServiceBase):
                 layer = b"\n".join(extracted_parts).strip()
                 layers_list.append(name)
                 break
+        # Save extracted scripts before deobfuscation
+        before_deobfuscation = layer
 
         # --- Stage 2: Deobsfucation ------------------------------------------------------------------------------
         techniques = first_pass
@@ -557,6 +547,16 @@ class DeobfuScripter(ServiceBase):
                 layer = res
 
         # --- Compiling results -----------------------------------------------------------------------------------
+        if request.get_param('extract_original_iocs'):
+            pat_values = patterns.ioc_match(before_deobfuscation, bogon_ip=True, just_network=False)
+            ioc_res = ResultSection("The following IOCs were found in the original file", parent=request.result,
+                                    body_format=BODY_FORMAT.MEMORY_DUMP)
+            for k, val in pat_values.items():
+                for v in val:
+                    if ioc_res:
+                        ioc_res.add_line(f"Found {k.upper().replace('.', ' ')}: {safe_str(v)}")
+                        ioc_res.add_tag(k, v)
+
         if not layers_list:
             return
         # Cleanup final layer
@@ -581,17 +581,17 @@ class DeobfuScripter(ServiceBase):
         for ioc_type, iocs in pat_values.items():
             for ioc in iocs:
                 if ioc_type == 'network.static.uri':
-                    if b'/'.join(ioc.split(b'/', 3)[:3]) not in request.file_contents:
+                    if b'/'.join(ioc.split(b'/', 3)[:3]) not in before_deobfuscation:
                         diff_tags.setdefault(ioc_type, [])
                         diff_tags[ioc_type].append(ioc)
-                elif ioc not in request.file_contents:
+                elif ioc not in before_deobfuscation:
                     diff_tags.setdefault(ioc_type, [])
                     diff_tags[ioc_type].append(ioc)
 
         # And for new reversed IOCs
         rev_values = patterns.ioc_match(clean[::-1], bogon_ip=True, just_network=False)
         rev_tags: Dict[str, List[bytes]] = {}
-        reversed_file = request.file_contents[::-1]
+        reversed_file = before_deobfuscation[::-1]
         for ioc_type, iocs in rev_values.items():
             for ioc in iocs:
                 if ioc_type == 'network.static.uri':
