@@ -511,6 +511,24 @@ class DeobfuScripter(ServiceBase):
         layer = request.file_contents
 
         # --- Stage 1: Script Extraction --------------------------------------------------------------------------
+        if request.file_type == 'code/ps1':
+            sig = regex.search(
+                rb'# SIG # Begin signature block\r\n(?:# [A-Za-z0-9+/=]+\r\n)+# SIG # End signature block',
+                request.file_contents)
+            if sig:
+                layer = layer[:sig.start()] + layer[sig.end():]
+                lines = sig.group().split(b'\r\n# ')
+                base64 = b''.join(line.strip() for line in lines[1:-1])
+                try:
+                    # Extract signature
+                    signature = binascii.a2b_base64(base64)
+                    sig_filename = 'powershell_signature'
+                    sig_path = os.path.join(self.working_directory, sig_filename)
+                    with open(sig_path, 'wb+') as f:
+                        f.write(signature)
+                    request.add_extracted(sig_path, sig_filename, "Powershell Signature")
+                except binascii.Error:
+                    pass
         for pattern, name, func in code_extracts:
             if regex.match(regex.compile(pattern), request.task.file_type):
                 extracted_parts = func(request.file_contents)
