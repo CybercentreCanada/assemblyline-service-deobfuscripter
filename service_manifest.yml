@@ -23,29 +23,35 @@ submission_params:
     value: false
 
 heuristics:
-  - description: Obfuscation techniques were found and deobfuscated in the file
+  - description: Obfuscation techniques were found and de-obfuscated in the file
     filetype: code/.*
     heur_id: 1
     name: Obfuscation
     score: 10
     max_score: 1000
 
-  - description: IOCs where found only after de-obfuscation
+  - description: IOCs were found after simple de-obfuscation
+    filetype: code/.*
+    heur_id: 5
+    name: Lightly De-obfuscated IOCs
+    score: 50
+
+  - description: IOCs were found only after layered de-obfuscations
     filetype: code/.*
     heur_id: 6
     name: De-obfuscated IOCs
-    score: 50
+    score: 100
 
-  - description: Network IOCs where found only after de-obfuscation
+  - description: Network IOCs were found only after layered de-obfuscations
     filetype: code/.*
     heur_id: 7
     name: De-obfuscated Network IOCs
     score: 500
 
-  - description: The service found interesting files during the deobfuscation
+  - description: The service found interesting files during the de-obfuscation
     filetype: code/.*
     heur_id: 8
-    name: Deobfuscated file
+    name: De-obfuscated file
     score: 10
 
 docker_config:

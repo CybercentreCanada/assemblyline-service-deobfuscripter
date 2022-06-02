@@ -7,19 +7,23 @@ import hashlib
 import os
 
 from collections import Counter
-from itertools import chain
 from typing import Callable, Dict, List, Optional, Set, Tuple
 
 import magic
 import regex
 
 from bs4 import BeautifulSoup
+from multidecoder.query import squash_replace, obfuscation_counts
 
 from assemblyline.common.str_utils import safe_str
-from assemblyline_v4_service.common.balbuzard.patterns import PatternMatch
+from assemblyline_v4_service.common.extractor.decode_wrapper import DecoderWrapper, get_tree_tags
 from assemblyline_v4_service.common.base import ServiceBase
 from assemblyline_v4_service.common.request import ServiceRequest, MaxExtractedExceeded
 from assemblyline_v4_service.common.result import Result, ResultSection, BODY_FORMAT, Heuristic
+
+
+# Type declarations
+TechniqueList = List[Tuple[str, Callable[[bytes], Optional[bytes]]]]
 
 
 class DeobfuScripter(ServiceBase):
@@ -471,7 +475,7 @@ class DeobfuScripter(ServiceBase):
     def execute(self, request: ServiceRequest) -> None:
         # --- Setup ----------------------------------------------------------------------------------------------
         request.result = Result()
-        patterns = PatternMatch()
+        md = DecoderWrapper()
 
         max_attempts = 100 if request.deep_scan else 10
 
@@ -479,7 +483,6 @@ class DeobfuScripter(ServiceBase):
         self.hashes = set()
 
         # --- Prepare Techniques ----------------------------------------------------------------------------------
-        TechniqueList = List[Tuple[str, Callable[[bytes], Optional[bytes]]]]
         first_pass: TechniqueList = [
             ('MSOffice Embedded script', self.msoffice_embedded_script_string),
             ('CHR and CHRB decode', self.chr_decode),
@@ -502,15 +505,22 @@ class DeobfuScripter(ServiceBase):
         final_pass: TechniqueList = [
             ('Charcode', self.charcode),
         ]
+        final_pass.extend(second_pass)
 
         code_extracts = [
             ('.*html.*', "HTML scripts extraction", self.extract_htmlscript)
         ]
 
-        layers_list: list[str] = []
         layer = request.file_contents
 
         # --- Stage 1: Script Extraction --------------------------------------------------------------------------
+        extract_res = ResultSection("Extraction")
+        for pattern, name, func in code_extracts:
+            if regex.match(regex.compile(pattern), request.task.file_type):
+                extracted_parts = func(request.file_contents)
+                layer = b"\n".join(extracted_parts).strip()
+                extract_res.add_line(name)
+                break
         if request.file_type == 'code/ps1':
             sig = regex.search(
                 rb'# SIG # Begin signature block\r\n(?:# [A-Za-z0-9+/=]+\r\n)+# SIG # End signature block',
@@ -527,46 +537,38 @@ class DeobfuScripter(ServiceBase):
                     with open(sig_path, 'wb+') as f:
                         f.write(signature)
                     request.add_extracted(sig_path, sig_filename, "Powershell Signature")
+                    extract_res.add_line(f"Powershell Signature Comment, see {sig_filename}")
                 except binascii.Error:
                     pass
-        for pattern, name, func in code_extracts:
-            if regex.match(regex.compile(pattern), request.task.file_type):
-                extracted_parts = func(request.file_contents)
-                layer = b"\n".join(extracted_parts).strip()
-                layers_list.append(name)
-                break
+        if extract_res.body:
+            request.result.add_section(extract_res)
+
         # Save extracted scripts before deobfuscation
         before_deobfuscation = layer
 
         # --- Stage 2: Deobsfucation ------------------------------------------------------------------------------
+        passes: dict[int, tuple[list[str], dict[str, set[bytes]]]] = {}
         techniques = first_pass
-        layers_count = len(layers_list)
-        for _ in range(max_attempts):
-            for name, technique in techniques:
-                result = technique(layer)
-                if result:
-                    layers_list.append(name)
-                    # Looks like it worked, restart with new layer
-                    layer = result
-            # If there are no new layers in a pass, start second pass or break
-            if layers_count == len(layers_list):
+        n_pass = 0  # Ensure n_pass is bound outside of the loop
+        for n_pass in range(max_attempts):
+            layer, techiques_used, iocs = self._deobfuscripter_pass(layer, techniques, md)
+            if techiques_used:
+                passes[n_pass] = techiques_used, iocs  # Store the techniques used and iocs found for each pass
+            else:
+                # If there are no new layers in a pass, start second pass or break
                 if len(techniques) != len(first_pass):
                     # Already on second pass
                     break
                 techniques = second_pass
-            layers_count = len(layers_list)
 
         # --- Final Layer -----------------------------------------------------------------------------------------
-        final_pass.extend(techniques)
-        for name, technique in final_pass:
-            res = technique(layer)
-            if res:
-                layers_list.append(name)
-                layer = res
+        layer, final_techniques, final_iocs = self._deobfuscripter_pass(layer, final_pass, md)
+        if final_techniques:
+            passes[n_pass+1] = final_techniques, final_iocs
 
         # --- Compiling results -----------------------------------------------------------------------------------
         if request.get_param('extract_original_iocs'):
-            pat_values = patterns.ioc_match(before_deobfuscation, bogon_ip=True, just_network=False)
+            pat_values = get_tree_tags(md.multidecoder.scan(before_deobfuscation, 1))
             ioc_res = ResultSection("The following IOCs were found in the original file", parent=request.result,
                                     body_format=BODY_FORMAT.MEMORY_DUMP)
             for k, val in pat_values.items():
@@ -575,7 +577,7 @@ class DeobfuScripter(ServiceBase):
                         ioc_res.add_line(f"Found {k.upper().replace('.', ' ')}: {safe_str(v)}")
                         ioc_res.add_tag(k, v)
 
-        if not layers_list:
+        if not passes:
             return
         # Cleanup final layer
         clean = self.clean_up_final_layer(layer)
@@ -588,41 +590,39 @@ class DeobfuScripter(ServiceBase):
                              parent=request.result,
                              heuristic=heuristic)
 
-        tech_count = Counter(layers_list)
+        tech_count = Counter()
+        for p in passes.values():
+            tech_count.update(p[0])
         for tech, count in tech_count.items():
             heuristic.add_signature_id(tech, frequency=count)
             mres.add_line(f"{tech}, {count} time(s).")
 
-        # Check for new IOCs
-        pat_values = patterns.ioc_match(clean, bogon_ip=True, just_network=False)
-        diff_tags: Dict[str, List[bytes]] = {}
-        for ioc_type, iocs in pat_values.items():
-            for ioc in iocs:
-                if ioc_type == 'network.static.uri':
-                    if b'/'.join(ioc.split(b'/', 3)[:3]) not in before_deobfuscation:
-                        diff_tags.setdefault(ioc_type, [])
-                        diff_tags[ioc_type].append(ioc)
-                elif ioc not in before_deobfuscation:
-                    diff_tags.setdefault(ioc_type, [])
-                    diff_tags[ioc_type].append(ioc)
-
+        # Filter for new IOCs
+        seen_iocs = set()
+        for n_pass, (_, iocs) in passes.items():
+            for ioc_type in iocs:
+                new_iocs = set()
+                for ioc in iocs[ioc_type]:
+                    prefix = b'/'.join(ioc.split(b'/', 3)[:3]) if ioc_type == 'network.static.uri' else ioc
+                    if prefix not in seen_iocs and prefix not in before_deobfuscation:
+                        new_iocs.add(ioc)
+                        seen_iocs.add(ioc)
+                iocs[ioc_type] = new_iocs
         # And for new reversed IOCs
-        rev_values = patterns.ioc_match(clean[::-1], bogon_ip=True, just_network=False)
-        rev_tags: Dict[str, List[bytes]] = {}
+        rev_iocs = md.ioc_tags(clean[::-1])
         reversed_file = before_deobfuscation[::-1]
-        for ioc_type, iocs in rev_values.items():
-            for ioc in iocs:
-                if ioc_type == 'network.static.uri':
-                    if b'/'.join(ioc.split(b'/', 3)[:3]) not in reversed_file:
-                        rev_tags.setdefault(ioc_type, [])
-                        rev_tags[ioc_type].append(ioc)
-                elif ioc not in reversed_file and ioc[::-1] not in diff_tags.get(ioc_type, []):
-                    rev_tags.setdefault(ioc_type, [])
-                    rev_tags[ioc_type].append(ioc)
+        for ioc_type in rev_iocs:
+            for ioc in rev_iocs[ioc_type]:
+                new_iocs = set()
+                prefix = b'/'.join(ioc.split(b'/', 3)[:3]) if ioc_type == 'network.static.uri' else ioc
+                if prefix not in seen_iocs and prefix not in reversed_file:
+                    new_iocs.add(ioc)
+                    seen_iocs.add(ioc)
+                rev_iocs[ioc_type] = new_iocs
 
         # Display final layer
         byte_count = 5000
-        if request.deep_scan or (len(clean) > 1000 and heuristic.score >= 500) or diff_tags or rev_tags:
+        if request.deep_scan or (len(clean) > 1000 and heuristic.score >= 500) or seen_iocs:
             # Save extracted file
             byte_count = 500
             file_name = f"{os.path.basename(request.file_name)}_decoded_final"
@@ -637,23 +637,33 @@ class DeobfuScripter(ServiceBase):
         ResultSection(f"First {byte_count} bytes of the final layer:", body=safe_str(clean[:byte_count]),
                       body_format=BODY_FORMAT.MEMORY_DUMP, parent=request.result)
 
-        # Display new IOCs from final layer
-        if diff_tags or rev_tags:
-            ioc_new = ResultSection("New IOCs found after de-obfustcation", parent=request.result,
+        # Report new IOCs
+        new_ioc_res = ResultSection("New IOCs found after de-obfustcation",
                                     body_format=BODY_FORMAT.MEMORY_DUMP)
-            has_network_heur = False
-            for ty, val in chain(diff_tags.items(), rev_tags.items()):
-                if "network" in ty and ty != 'network.static.domain':
-                    has_network_heur = True
-                for v in val:
-                    ioc_new.add_line(f"Found {ty.upper().replace('.', ' ')}: {safe_str(v)}")
-                    ioc_new.add_tag(ty, v)
+        heuristic = 5
+        for n_pass, (_, iocs) in passes.items():
+            if not iocs:
+                continue
+            new_ioc_res.add_line("New IOCs found in pass {n_pass}:")
+            for ioc_type in iocs:
+                for ioc in iocs[ioc_type]:
+                    if n_pass != 0:  # iocs in the first pass can be found by other services
+                        heuristic = max(7 if 'network' in ioc_type and ioc_type != 'network.static.domain'
+                                        else 6, heuristic)
+                    new_ioc_res.add_line(f"Found {ioc_type.upper().replace('.', ' ')}: {safe_str(ioc)}")
+                    new_ioc_res.add_tag(ioc_type, ioc)
+        if rev_iocs:
+            new_ioc_res.add_line("New IOCs found reversed in the final layer:")
+            for ioc_type in rev_iocs:
+                for ioc in rev_iocs[ioc_type]:
+                    heuristic = max(7 if 'network' in ioc_type and ioc_type != 'network.static.domain'
+                                    else 6, heuristic)
+                    new_ioc_res.add_line(f"Found {ioc_type.upper().replace('.', ' ')}: {safe_str(ioc)}")
+                    new_ioc_res.add_tag(ioc_type, ioc)
+        if new_ioc_res.body:
+            request.result.add_section(new_ioc_res)
 
-            if has_network_heur:
-                ioc_new.set_heuristic(7)
-            else:
-                ioc_new.set_heuristic(6)
-
+        # Report extracted files
         if len(self.files_extracted) > 0:
             ext_file_res = ResultSection("The following files were extracted during the deobfuscation",
                                          heuristic=Heuristic(8), parent=request.result)
@@ -666,3 +676,22 @@ class DeobfuScripter(ServiceBase):
                 except MaxExtractedExceeded:
                     self.log.warning('Extraction limit exceeded while adding files of interest.')
                     break
+
+    @staticmethod
+    def _deobfuscripter_pass(layer: bytes,
+                             techniques: TechniqueList,
+                             md: DecoderWrapper,
+                             final=False) -> tuple[bytes, list[str], dict]:
+        techniques_used = []
+        for name, technique in techniques:
+            result = technique(layer)
+            if result:
+                techniques_used.append(name)
+                # Looks like it worked, continue with the new layer
+                layer = result
+        # Use multidecoder techniques and ioc tagging
+        tree = md.multidecoder.scan(layer, depth=10 if final else 1)
+        techniques_used.extend(obfuscation_counts(tree).keys())
+        iocs = get_tree_tags(tree)  # Get IoCs for the pass
+        layer = squash_replace(layer, tree)
+        return layer, techniques_used, iocs
