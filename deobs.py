@@ -562,7 +562,7 @@ class DeobfuScripter(ServiceBase):
                 techniques = second_pass
 
         # --- Final Layer -----------------------------------------------------------------------------------------
-        layer, final_techniques, final_iocs = self._deobfuscripter_pass(layer, final_pass, md)
+        layer, final_techniques, final_iocs = self._deobfuscripter_pass(layer, final_pass, md, final=True)
         if final_techniques:
             passes[n_pass+1] = final_techniques, final_iocs
 
@@ -640,16 +640,17 @@ class DeobfuScripter(ServiceBase):
         # Report new IOCs
         new_ioc_res = ResultSection("New IOCs found after de-obfustcation",
                                     body_format=BODY_FORMAT.MEMORY_DUMP)
-        heuristic = 5
+        heuristic = 0
         for n_pass, (_, iocs) in passes.items():
             if not iocs:
                 continue
             new_ioc_res.add_line("New IOCs found in pass {n_pass}:")
             for ioc_type in iocs:
                 for ioc in iocs[ioc_type]:
-                    if n_pass != 0:  # iocs in the first pass can be found by other services
-                        heuristic = max(7 if 'network' in ioc_type and ioc_type != 'network.static.domain'
-                                        else 6, heuristic)
+                    if n_pass == 0:  # iocs in the first pass can be found by other services
+                        heuristic = 5
+                    elif heuristic < 7:
+                        heuristic = 7 if 'network' in ioc_type and ioc_type != 'network.static.domain' else 6
                     new_ioc_res.add_line(f"Found {ioc_type.upper().replace('.', ' ')}: {safe_str(ioc)}")
                     new_ioc_res.add_tag(ioc_type, ioc)
         if rev_iocs:
@@ -660,6 +661,8 @@ class DeobfuScripter(ServiceBase):
                                     else 6, heuristic)
                     new_ioc_res.add_line(f"Found {ioc_type.upper().replace('.', ' ')}: {safe_str(ioc)}")
                     new_ioc_res.add_tag(ioc_type, ioc)
+        if heuristic > 0:
+            new_ioc_res.set_heuristic(heuristic)
         if new_ioc_res.body:
             request.result.add_section(new_ioc_res)
 
@@ -690,7 +693,10 @@ class DeobfuScripter(ServiceBase):
                 # Looks like it worked, continue with the new layer
                 layer = result
         # Use multidecoder techniques and ioc tagging
-        tree = md.multidecoder.scan(layer, depth=10 if final else 1)
+        if final:
+            tree = md.multidecoder.scan(layer)
+        else:
+            tree = md.multidecoder.scan(layer, depth=1)
         techniques_used.extend(obfuscation_counts(tree).keys())
         iocs = get_tree_tags(tree)  # Get IoCs for the pass
         layer = squash_replace(layer, tree)
