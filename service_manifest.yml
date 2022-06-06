@@ -40,7 +40,7 @@ heuristics:
     filetype: code/.*
     heur_id: 7
     name: De-obfuscated Network IOCs
-    score: 500
+    score: 100
 
   - description: The service found interesting files during the deobfuscation
     filetype: code/.*
