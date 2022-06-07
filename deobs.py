@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import binascii
-import hashlib
 import os
 
 from collections import Counter
-from typing import Callable, Dict, List, Optional, Set, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
-import magic
 import regex
 
 from bs4 import BeautifulSoup
@@ -34,8 +32,6 @@ class DeobfuScripter(ServiceBase):
 
     def __init__(self, config: Optional[Dict] = None) -> None:
         super().__init__(config)
-        self.hashes: Set[str] = set()
-        self.files_extracted: Set[str] = set()
 
     def start(self) -> None:
         self.log.debug("DeobfuScripter service started")
@@ -167,49 +163,6 @@ class DeobfuScripter(ServiceBase):
             if output != text:
                 return output
         return None
-
-    def b64decode_str(self, text: bytes) -> Optional[bytes]:
-        """ Decode base64 """
-        b64str = regex.findall(b'((?:[A-Za-z0-9+/]{3,}={0,2}(?:&#[x1][A0];)?[\r]?[\n]?){6,})', text)
-        output = text
-        for bmatch in b64str:
-            s = bmatch.replace(b'\n',
-                               b'').replace(b'\r', b'').replace(b' ', b'').replace(b'&#xA;', b'').replace(b'&#10;', b'')
-            uniq_char = set(s)
-            if len(uniq_char) > 6:
-                if len(s) >= 16 and len(s) % 4 == 0:
-                    try:
-                        d = binascii.a2b_base64(s)
-                    except binascii.Error:
-                        continue
-                    m = magic.Magic(mime=True)
-                    mag = magic.Magic()
-                    ftype = m.from_buffer(d)
-                    mag_ftype = mag.from_buffer(d)
-                    sha256hash = hashlib.sha256(d).hexdigest()
-                    if sha256hash not in self.hashes:
-                        if len(d) > 500:
-                            for file_type in self.FILETYPES:
-                                if (file_type in ftype and 'octet-stream' not in ftype) or file_type in mag_ftype:
-                                    b64_file_name = f"{sha256hash[0:10]}_b64_decoded"
-                                    b64_file_path = os.path.join(self.working_directory, b64_file_name)
-                                    with open(b64_file_path, 'wb') as b64_file:
-                                        b64_file.write(d)
-                                    self.files_extracted.add(b64_file_path)
-                                    self.hashes.add(sha256hash)
-                                    break
-
-                        if len(set(d)) > 6 and all(8 < c < 127 for c in d) and len(regex.sub(rb"\s", b"", d)) > 14:
-                            output = output.replace(bmatch, d)
-                        else:
-                            # Test for ASCII seperated by \x00
-                            p = d.replace(b'\x00', b'')
-                            if len(set(p)) > 6 and all(8 < c < 127 for c in p) and len(regex.sub(rb"\s", b"", p)) > 14:
-                                output = output.replace(bmatch, p)
-
-        if output == text:
-            return None
-        return output
 
     @staticmethod
     def vars_of_fake_arrays(text: bytes) -> Optional[bytes]:
@@ -475,12 +428,9 @@ class DeobfuScripter(ServiceBase):
     def execute(self, request: ServiceRequest) -> None:
         # --- Setup ----------------------------------------------------------------------------------------------
         request.result = Result()
-        md = DecoderWrapper()
+        md = DecoderWrapper(self.working_directory)
 
         max_attempts = 100 if request.deep_scan else 10
-
-        self.files_extracted = set()
-        self.hashes = set()
 
         # --- Prepare Techniques ----------------------------------------------------------------------------------
         first_pass: TechniqueList = [
@@ -491,7 +441,6 @@ class DeobfuScripter(ServiceBase):
             ('Array of strings', self.array_of_strings),
             ('Fake array vars', self.vars_of_fake_arrays),
             ('Reverse strings', self.str_reverse),
-            ('B64 Decode', self.b64decode_str),
             ('Simple XOR function', self.simple_xor_function),
         ]
         second_pass: TechniqueList = [
@@ -667,10 +616,10 @@ class DeobfuScripter(ServiceBase):
             request.result.add_section(new_ioc_res)
 
         # Report extracted files
-        if len(self.files_extracted) > 0:
+        if md.extracted_files:
             ext_file_res = ResultSection("The following files were extracted during the deobfuscation",
                                          heuristic=Heuristic(8), parent=request.result)
-            for extracted in self.files_extracted:
+            for extracted in md.extracted_files:
                 file_name = os.path.basename(extracted)
                 try:
                     if request.add_extracted(extracted, file_name, "File of interest deobfuscated from sample",
@@ -697,6 +646,7 @@ class DeobfuScripter(ServiceBase):
             tree = md.multidecoder.scan(layer)
         else:
             tree = md.multidecoder.scan(layer, depth=1)
+        md.extract_files(tree, 500)
         techniques_used.extend(obfuscation_counts(tree).keys())
         iocs = get_tree_tags(tree)  # Get IoCs for the pass
         layer = squash_replace(layer, tree)
