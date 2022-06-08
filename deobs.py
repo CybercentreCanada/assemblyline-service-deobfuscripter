@@ -115,7 +115,6 @@ class DeobfuScripter(ServiceBase):
             output = output.replace(escape, int(escape[2:-1]).to_bytes(1, 'big'))
         return output if output != text else None
 
-
     @staticmethod
     def vars_of_fake_arrays(text: bytes) -> Optional[bytes]:
         """ Parse variables of fake arrays """
@@ -156,19 +155,6 @@ class DeobfuScripter(ServiceBase):
         except Exception as e:
             self.log.warning(f"Technique array_of_strings failed with error: {str(e)}")
 
-        return None
-
-    @staticmethod
-    def str_reverse(text: bytes) -> Optional[bytes]:
-        """ Replace StrReverse function calls with the reverse of its argument """
-        output = text
-        # VBA format StrReverse("[text]")
-        replacements = regex.findall(rb'(StrReverse\("(.+?(?="\))))', output)
-        for full, string in replacements:
-            reversed_string = full.replace(string, string[::-1]).replace(b"StrReverse(", b"")[:-1]
-            output = output.replace(full, reversed_string)
-        if output != text:
-            return output
         return None
 
     @staticmethod
@@ -381,7 +367,6 @@ class DeobfuScripter(ServiceBase):
             ('Powershell carets', self.powershell_carets),
             ('Array of strings', self.array_of_strings),
             ('Fake array vars', self.vars_of_fake_arrays),
-            ('Reverse strings', self.str_reverse),
             ('Simple XOR function', self.simple_xor_function),
         ]
         second_pass: TechniqueList = [
