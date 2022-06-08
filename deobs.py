@@ -26,7 +26,6 @@ TechniqueList = List[Tuple[str, Callable[[bytes], Optional[bytes]]]]
 
 class DeobfuScripter(ServiceBase):
     """ Service for deobfuscating scripts """
-    FILETYPES = ['application', 'document', 'exec', 'image', 'Microsoft', 'text']
     VALIDCHARS = b' 0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~'
     BINCHARS = bytes(list(set(range(0, 256)) - set(VALIDCHARS)))
 
@@ -102,20 +101,6 @@ class DeobfuScripter(ServiceBase):
                     final_dec = regex.sub(b'[\x00]*$', b'', decoded)
                     output = output.replace(hex_char, final_dec)
 
-        if output == text:
-            return None
-        return output
-
-    @staticmethod
-    def chr_decode(text: bytes) -> Optional[bytes]:
-        """ Replace calls to chr with the corresponding character """
-        output = text
-        for fullc, c in regex.findall(rb'(chr[bw]?\(([0-9]{1,3})\))', output, regex.I):
-            # noinspection PyBroadException
-            try:
-                output = regex.sub(regex.escape(fullc), '"{}"'.format(chr(int(c))).encode('utf-8'), output)
-            except Exception:
-                continue
         if output == text:
             return None
         return output
@@ -435,7 +420,6 @@ class DeobfuScripter(ServiceBase):
         # --- Prepare Techniques ----------------------------------------------------------------------------------
         first_pass: TechniqueList = [
             ('MSOffice Embedded script', self.msoffice_embedded_script_string),
-            ('CHR and CHRB decode', self.chr_decode),
             ('String replace', self.string_replace),
             ('Powershell carets', self.powershell_carets),
             ('Array of strings', self.array_of_strings),
