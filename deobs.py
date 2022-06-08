@@ -115,39 +115,6 @@ class DeobfuScripter(ServiceBase):
             output = output.replace(escape, int(escape[2:-1]).to_bytes(1, 'big'))
         return output if output != text else None
 
-    @staticmethod
-    def string_replace(text: bytes) -> Optional[bytes]:
-        """ Replace calls to replace() with their output """
-        if b'replace(' in text.lower():
-            # Process string with replace functions calls
-            # Such as "SaokzueofpigxoFile".replace(/ofpigx/g, "T").replace(/okzu/g, "v")
-            output = text
-            # Find all occurrences of string replace (JS)
-            for strreplace in [o[0] for o in
-                               regex.findall(rb'(["\'][^"\']+["\']((\.replace\([^)]+\))+))', output, flags=regex.I)]:
-                substitute = strreplace
-                # Extract all substitutions
-                for str1, str2 in regex.findall(rb'\.replace\([/\'"]([^,]+)[/\'\"]g?\s*,\s*[\'\"]([^)]*)[\'\"]\)',
-                                                substitute, flags=regex.I):
-                    # Execute the substitution
-                    substitute = substitute.replace(str1, str2)
-                # Remove the replace calls from the layer (prevent accidental substitutions in the next step)
-                substitute = substitute[:substitute.lower().index(b'.replace(')]
-                output = output.replace(strreplace, substitute)
-
-            # Process global string replace
-            replacements = regex.findall(rb'replace\(\s*/([^)]+)/g?, [\'"]([^\'"]*)[\'"]', output)
-            for str1, str2 in replacements:
-                output = output.replace(str1, str2)
-            # Process VB string replace
-            replacements = regex.findall(rb'Replace\(\s*["\']?([^,"\']*)["\']?\s*,\s*["\']?'
-                                         rb'([^,"\']*)["\']?\s*,\s*["\']?([^,"\']*)["\']?', output)
-            for str1, str2, str3 in replacements:
-                output = output.replace(str1, str1.replace(str2, str3))
-            output = regex.sub(rb'\.replace\(\s*/([^)]+)/g?, [\'"]([^\'"]*)[\'"]\)', b'', output)
-            if output != text:
-                return output
-        return None
 
     @staticmethod
     def vars_of_fake_arrays(text: bytes) -> Optional[bytes]:
@@ -420,7 +387,6 @@ class DeobfuScripter(ServiceBase):
         # --- Prepare Techniques ----------------------------------------------------------------------------------
         first_pass: TechniqueList = [
             ('MSOffice Embedded script', self.msoffice_embedded_script_string),
-            ('String replace', self.string_replace),
             ('Powershell carets', self.powershell_carets),
             ('Array of strings', self.array_of_strings),
             ('Fake array vars', self.vars_of_fake_arrays),
