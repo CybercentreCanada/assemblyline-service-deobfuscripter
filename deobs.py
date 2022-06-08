@@ -159,15 +159,6 @@ class DeobfuScripter(ServiceBase):
         return None
 
     @staticmethod
-    def concat_strings(text: bytes) -> Optional[bytes]:
-        """ Concatenate disconnected strings """
-        # Line continuation character in VB -- '_'
-        output = regex.sub(rb'[\'"][\s\n_]*?[+&][\s\n_]*[\'"]', b'', text)
-        if output != text:
-            return output
-        return None
-
-    @staticmethod
     def str_reverse(text: bytes) -> Optional[bytes]:
         """ Replace StrReverse function calls with the reverse of its argument """
         output = text
@@ -394,7 +385,6 @@ class DeobfuScripter(ServiceBase):
             ('Simple XOR function', self.simple_xor_function),
         ]
         second_pass: TechniqueList = [
-            ('Concat strings', self.concat_strings),
             ('MSWord macro vars', self.mswordmacro_vars),
             ('Powershell vars', self.powershell_vars),
             ('Charcode hex', self.charcode_hex),
