@@ -395,6 +395,8 @@ class DeobfuScripter(ServiceBase):
                 layer = b"\n".join(extracted_parts).strip()
                 extract_res.add_line(name)
                 break
+        if len(layer.strip()) < 2:
+            return  # No script present in file
         if request.file_type == 'code/ps1':
             sig = regex.search(
                 rb'# SIG # Begin signature block\r\n(?:# [A-Za-z0-9+/=]+\r\n)+# SIG # End signature block',
