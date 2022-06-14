@@ -3,35 +3,34 @@
 from __future__ import annotations
 
 import binascii
-import hashlib
 import os
 
 from collections import Counter
-from itertools import chain
-from typing import Callable, Dict, List, Optional, Set, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
-import magic
 import regex
 
 from bs4 import BeautifulSoup
+from multidecoder.query import squash_replace, obfuscation_counts
 
 from assemblyline.common.str_utils import safe_str
-from assemblyline_v4_service.common.balbuzard.patterns import PatternMatch
+from assemblyline_v4_service.common.extractor.decode_wrapper import DecoderWrapper, get_tree_tags
 from assemblyline_v4_service.common.base import ServiceBase
 from assemblyline_v4_service.common.request import ServiceRequest, MaxExtractedExceeded
 from assemblyline_v4_service.common.result import Result, ResultSection, BODY_FORMAT, Heuristic
 
 
+# Type declarations
+TechniqueList = List[Tuple[str, Callable[[bytes], Optional[bytes]]]]
+
+
 class DeobfuScripter(ServiceBase):
     """ Service for deobfuscating scripts """
-    FILETYPES = ['application', 'document', 'exec', 'image', 'Microsoft', 'text']
     VALIDCHARS = b' 0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~'
     BINCHARS = bytes(list(set(range(0, 256)) - set(VALIDCHARS)))
 
     def __init__(self, config: Optional[Dict] = None) -> None:
         super().__init__(config)
-        self.hashes: Set[str] = set()
-        self.files_extracted: Set[str] = set()
 
     def start(self) -> None:
         self.log.debug("DeobfuScripter service started")
@@ -107,20 +106,6 @@ class DeobfuScripter(ServiceBase):
         return output
 
     @staticmethod
-    def chr_decode(text: bytes) -> Optional[bytes]:
-        """ Replace calls to chr with the corresponding character """
-        output = text
-        for fullc, c in regex.findall(rb'(chr[bw]?\(([0-9]{1,3})\))', output, regex.I):
-            # noinspection PyBroadException
-            try:
-                output = regex.sub(regex.escape(fullc), '"{}"'.format(chr(int(c))).encode('utf-8'), output)
-            except Exception:
-                continue
-        if output == text:
-            return None
-        return output
-
-    @staticmethod
     def xml_unescape(text: bytes) -> Optional[bytes]:
         """ Replace XML escape sequences with the corresponding character """
         output = text
@@ -129,83 +114,6 @@ class DeobfuScripter(ServiceBase):
         for escape in regex.findall(rb'&#(?:25[0-5]|2[0-4][0-9]|[0-1]?[0-9]{1,2});', text):
             output = output.replace(escape, int(escape[2:-1]).to_bytes(1, 'big'))
         return output if output != text else None
-
-    @staticmethod
-    def string_replace(text: bytes) -> Optional[bytes]:
-        """ Replace calls to replace() with their output """
-        if b'replace(' in text.lower():
-            # Process string with replace functions calls
-            # Such as "SaokzueofpigxoFile".replace(/ofpigx/g, "T").replace(/okzu/g, "v")
-            output = text
-            # Find all occurrences of string replace (JS)
-            for strreplace in [o[0] for o in
-                               regex.findall(rb'(["\'][^"\']+["\']((\.replace\([^)]+\))+))', output, flags=regex.I)]:
-                substitute = strreplace
-                # Extract all substitutions
-                for str1, str2 in regex.findall(rb'\.replace\([/\'"]([^,]+)[/\'\"]g?\s*,\s*[\'\"]([^)]*)[\'\"]\)',
-                                                substitute, flags=regex.I):
-                    # Execute the substitution
-                    substitute = substitute.replace(str1, str2)
-                # Remove the replace calls from the layer (prevent accidental substitutions in the next step)
-                substitute = substitute[:substitute.lower().index(b'.replace(')]
-                output = output.replace(strreplace, substitute)
-
-            # Process global string replace
-            replacements = regex.findall(rb'replace\(\s*/([^)]+)/g?, [\'"]([^\'"]*)[\'"]', output)
-            for str1, str2 in replacements:
-                output = output.replace(str1, str2)
-            # Process VB string replace
-            replacements = regex.findall(rb'Replace\(\s*["\']?([^,"\']*)["\']?\s*,\s*["\']?'
-                                         rb'([^,"\']*)["\']?\s*,\s*["\']?([^,"\']*)["\']?', output)
-            for str1, str2, str3 in replacements:
-                output = output.replace(str1, str1.replace(str2, str3))
-            output = regex.sub(rb'\.replace\(\s*/([^)]+)/g?, [\'"]([^\'"]*)[\'"]\)', b'', output)
-            if output != text:
-                return output
-        return None
-
-    def b64decode_str(self, text: bytes) -> Optional[bytes]:
-        """ Decode base64 """
-        b64str = regex.findall(b'((?:[A-Za-z0-9+/]{3,}={0,2}(?:&#[x1][A0];)?[\r]?[\n]?){6,})', text)
-        output = text
-        for bmatch in b64str:
-            s = bmatch.replace(b'\n',
-                               b'').replace(b'\r', b'').replace(b' ', b'').replace(b'&#xA;', b'').replace(b'&#10;', b'')
-            uniq_char = set(s)
-            if len(uniq_char) > 6:
-                if len(s) >= 16 and len(s) % 4 == 0:
-                    try:
-                        d = binascii.a2b_base64(s)
-                    except binascii.Error:
-                        continue
-                    m = magic.Magic(mime=True)
-                    mag = magic.Magic()
-                    ftype = m.from_buffer(d)
-                    mag_ftype = mag.from_buffer(d)
-                    sha256hash = hashlib.sha256(d).hexdigest()
-                    if sha256hash not in self.hashes:
-                        if len(d) > 500:
-                            for file_type in self.FILETYPES:
-                                if (file_type in ftype and 'octet-stream' not in ftype) or file_type in mag_ftype:
-                                    b64_file_name = f"{sha256hash[0:10]}_b64_decoded"
-                                    b64_file_path = os.path.join(self.working_directory, b64_file_name)
-                                    with open(b64_file_path, 'wb') as b64_file:
-                                        b64_file.write(d)
-                                    self.files_extracted.add(b64_file_path)
-                                    self.hashes.add(sha256hash)
-                                    break
-
-                        if len(set(d)) > 6 and all(8 < c < 127 for c in d) and len(regex.sub(rb"\s", b"", d)) > 14:
-                            output = output.replace(bmatch, d)
-                        else:
-                            # Test for ASCII seperated by \x00
-                            p = d.replace(b'\x00', b'')
-                            if len(set(p)) > 6 and all(8 < c < 127 for c in p) and len(regex.sub(rb"\s", b"", p)) > 14:
-                                output = output.replace(bmatch, p)
-
-        if output == text:
-            return None
-        return output
 
     @staticmethod
     def vars_of_fake_arrays(text: bytes) -> Optional[bytes]:
@@ -247,28 +155,6 @@ class DeobfuScripter(ServiceBase):
         except Exception as e:
             self.log.warning(f"Technique array_of_strings failed with error: {str(e)}")
 
-        return None
-
-    @staticmethod
-    def concat_strings(text: bytes) -> Optional[bytes]:
-        """ Concatenate disconnected strings """
-        # Line continuation character in VB -- '_'
-        output = regex.sub(rb'[\'"][\s\n_]*?[+&][\s\n_]*[\'"]', b'', text)
-        if output != text:
-            return output
-        return None
-
-    @staticmethod
-    def str_reverse(text: bytes) -> Optional[bytes]:
-        """ Replace StrReverse function calls with the reverse of its argument """
-        output = text
-        # VBA format StrReverse("[text]")
-        replacements = regex.findall(rb'(StrReverse\("(.+?(?="\))))', output)
-        for full, string in replacements:
-            reversed_string = full.replace(string, string[::-1]).replace(b"StrReverse(", b"")[:-1]
-            output = output.replace(full, reversed_string)
-        if output != text:
-            return output
         return None
 
     @staticmethod
@@ -471,28 +357,19 @@ class DeobfuScripter(ServiceBase):
     def execute(self, request: ServiceRequest) -> None:
         # --- Setup ----------------------------------------------------------------------------------------------
         request.result = Result()
-        patterns = PatternMatch()
+        md = DecoderWrapper(self.working_directory)
 
         max_attempts = 100 if request.deep_scan else 10
 
-        self.files_extracted = set()
-        self.hashes = set()
-
         # --- Prepare Techniques ----------------------------------------------------------------------------------
-        TechniqueList = List[Tuple[str, Callable[[bytes], Optional[bytes]]]]
         first_pass: TechniqueList = [
             ('MSOffice Embedded script', self.msoffice_embedded_script_string),
-            ('CHR and CHRB decode', self.chr_decode),
-            ('String replace', self.string_replace),
             ('Powershell carets', self.powershell_carets),
             ('Array of strings', self.array_of_strings),
             ('Fake array vars', self.vars_of_fake_arrays),
-            ('Reverse strings', self.str_reverse),
-            ('B64 Decode', self.b64decode_str),
             ('Simple XOR function', self.simple_xor_function),
         ]
         second_pass: TechniqueList = [
-            ('Concat strings', self.concat_strings),
             ('MSWord macro vars', self.mswordmacro_vars),
             ('Powershell vars', self.powershell_vars),
             ('Charcode hex', self.charcode_hex),
@@ -502,15 +379,24 @@ class DeobfuScripter(ServiceBase):
         final_pass: TechniqueList = [
             ('Charcode', self.charcode),
         ]
+        final_pass.extend(second_pass)
 
         code_extracts = [
             ('.*html.*', "HTML scripts extraction", self.extract_htmlscript)
         ]
 
-        layers_list: list[str] = []
         layer = request.file_contents
 
         # --- Stage 1: Script Extraction --------------------------------------------------------------------------
+        extract_res = ResultSection("Extraction")
+        for pattern, name, func in code_extracts:
+            if regex.match(regex.compile(pattern), request.task.file_type):
+                extracted_parts = func(request.file_contents)
+                layer = b"\n".join(extracted_parts).strip()
+                extract_res.add_line(name)
+                break
+        if len(layer.strip()) < 2:
+            return  # No script present in file
         if request.file_type == 'code/ps1':
             sig = regex.search(
                 rb'# SIG # Begin signature block\r\n(?:# [A-Za-z0-9+/=]+\r\n)+# SIG # End signature block',
@@ -527,46 +413,38 @@ class DeobfuScripter(ServiceBase):
                     with open(sig_path, 'wb+') as f:
                         f.write(signature)
                     request.add_extracted(sig_path, sig_filename, "Powershell Signature")
+                    extract_res.add_line(f"Powershell Signature Comment, see {sig_filename}")
                 except binascii.Error:
                     pass
-        for pattern, name, func in code_extracts:
-            if regex.match(regex.compile(pattern), request.task.file_type):
-                extracted_parts = func(request.file_contents)
-                layer = b"\n".join(extracted_parts).strip()
-                layers_list.append(name)
-                break
+        if extract_res.body:
+            request.result.add_section(extract_res)
+
         # Save extracted scripts before deobfuscation
         before_deobfuscation = layer
 
         # --- Stage 2: Deobsfucation ------------------------------------------------------------------------------
+        passes: dict[int, tuple[list[str], dict[str, set[bytes]]]] = {}
         techniques = first_pass
-        layers_count = len(layers_list)
-        for _ in range(max_attempts):
-            for name, technique in techniques:
-                result = technique(layer)
-                if result:
-                    layers_list.append(name)
-                    # Looks like it worked, restart with new layer
-                    layer = result
-            # If there are no new layers in a pass, start second pass or break
-            if layers_count == len(layers_list):
+        n_pass = 0  # Ensure n_pass is bound outside of the loop
+        for n_pass in range(max_attempts):
+            layer, techiques_used, iocs = self._deobfuscripter_pass(layer, techniques, md)
+            if techiques_used:
+                passes[n_pass] = techiques_used, iocs  # Store the techniques used and iocs found for each pass
+            else:
+                # If there are no new layers in a pass, start second pass or break
                 if len(techniques) != len(first_pass):
                     # Already on second pass
                     break
                 techniques = second_pass
-            layers_count = len(layers_list)
 
         # --- Final Layer -----------------------------------------------------------------------------------------
-        final_pass.extend(techniques)
-        for name, technique in final_pass:
-            res = technique(layer)
-            if res:
-                layers_list.append(name)
-                layer = res
+        layer, final_techniques, final_iocs = self._deobfuscripter_pass(layer, final_pass, md, final=True)
+        if final_techniques:
+            passes[n_pass+1] = final_techniques, final_iocs
 
         # --- Compiling results -----------------------------------------------------------------------------------
         if request.get_param('extract_original_iocs'):
-            pat_values = patterns.ioc_match(before_deobfuscation, bogon_ip=True, just_network=False)
+            pat_values = get_tree_tags(md.multidecoder.scan(before_deobfuscation, 1))
             ioc_res = ResultSection("The following IOCs were found in the original file", parent=request.result,
                                     body_format=BODY_FORMAT.MEMORY_DUMP)
             for k, val in pat_values.items():
@@ -575,7 +453,7 @@ class DeobfuScripter(ServiceBase):
                         ioc_res.add_line(f"Found {k.upper().replace('.', ' ')}: {safe_str(v)}")
                         ioc_res.add_tag(k, v)
 
-        if not layers_list:
+        if not passes:
             return
         # Cleanup final layer
         clean = self.clean_up_final_layer(layer)
@@ -588,41 +466,39 @@ class DeobfuScripter(ServiceBase):
                              parent=request.result,
                              heuristic=heuristic)
 
-        tech_count = Counter(layers_list)
+        tech_count = Counter()
+        for p in passes.values():
+            tech_count.update(p[0])
         for tech, count in tech_count.items():
             heuristic.add_signature_id(tech, frequency=count)
             mres.add_line(f"{tech}, {count} time(s).")
 
-        # Check for new IOCs
-        pat_values = patterns.ioc_match(clean, bogon_ip=True, just_network=False)
-        diff_tags: Dict[str, List[bytes]] = {}
-        for ioc_type, iocs in pat_values.items():
-            for ioc in iocs:
-                if ioc_type == 'network.static.uri':
-                    if b'/'.join(ioc.split(b'/', 3)[:3]) not in before_deobfuscation:
-                        diff_tags.setdefault(ioc_type, [])
-                        diff_tags[ioc_type].append(ioc)
-                elif ioc not in before_deobfuscation:
-                    diff_tags.setdefault(ioc_type, [])
-                    diff_tags[ioc_type].append(ioc)
-
+        # Filter for new IOCs
+        seen_iocs = set()
+        for n_pass, (_, iocs) in passes.items():
+            for ioc_type in iocs:
+                new_iocs = set()
+                for ioc in iocs[ioc_type]:
+                    prefix = b'/'.join(ioc.split(b'/', 3)[:3]) if ioc_type == 'network.static.uri' else ioc
+                    if prefix not in seen_iocs and prefix not in before_deobfuscation:
+                        new_iocs.add(ioc)
+                        seen_iocs.add(ioc)
+                iocs[ioc_type] = new_iocs
         # And for new reversed IOCs
-        rev_values = patterns.ioc_match(clean[::-1], bogon_ip=True, just_network=False)
-        rev_tags: Dict[str, List[bytes]] = {}
+        rev_iocs = md.ioc_tags(clean[::-1])
         reversed_file = before_deobfuscation[::-1]
-        for ioc_type, iocs in rev_values.items():
-            for ioc in iocs:
-                if ioc_type == 'network.static.uri':
-                    if b'/'.join(ioc.split(b'/', 3)[:3]) not in reversed_file:
-                        rev_tags.setdefault(ioc_type, [])
-                        rev_tags[ioc_type].append(ioc)
-                elif ioc not in reversed_file and ioc[::-1] not in diff_tags.get(ioc_type, []):
-                    rev_tags.setdefault(ioc_type, [])
-                    rev_tags[ioc_type].append(ioc)
+        for ioc_type in rev_iocs:
+            for ioc in rev_iocs[ioc_type]:
+                new_iocs = set()
+                prefix = b'/'.join(ioc.split(b'/', 3)[:3]) if ioc_type == 'network.static.uri' else ioc
+                if prefix not in seen_iocs and prefix not in reversed_file:
+                    new_iocs.add(ioc)
+                    seen_iocs.add(ioc)
+                rev_iocs[ioc_type] = new_iocs
 
         # Display final layer
         byte_count = 5000
-        if request.deep_scan or (len(clean) > 1000 and heuristic.score >= 500) or diff_tags or rev_tags:
+        if request.deep_scan or (len(clean) > 1000 and heuristic.score >= 500) or seen_iocs:
             # Save extracted file
             byte_count = 500
             file_name = f"{os.path.basename(request.file_name)}_decoded_final"
@@ -637,27 +513,40 @@ class DeobfuScripter(ServiceBase):
         ResultSection(f"First {byte_count} bytes of the final layer:", body=safe_str(clean[:byte_count]),
                       body_format=BODY_FORMAT.MEMORY_DUMP, parent=request.result)
 
-        # Display new IOCs from final layer
-        if diff_tags or rev_tags:
-            ioc_new = ResultSection("New IOCs found after de-obfustcation", parent=request.result,
+        # Report new IOCs
+        new_ioc_res = ResultSection("New IOCs found after de-obfustcation",
                                     body_format=BODY_FORMAT.MEMORY_DUMP)
-            has_network_heur = False
-            for ty, val in chain(diff_tags.items(), rev_tags.items()):
-                if "network" in ty and ty != 'network.static.domain':
-                    has_network_heur = True
-                for v in val:
-                    ioc_new.add_line(f"Found {ty.upper().replace('.', ' ')}: {safe_str(v)}")
-                    ioc_new.add_tag(ty, v)
+        heuristic = 0
+        for n_pass, (_, iocs) in passes.items():
+            if not iocs:
+                continue
+            new_ioc_res.add_line("New IOCs found in pass {n_pass}:")
+            for ioc_type in iocs:
+                for ioc in iocs[ioc_type]:
+                    if n_pass == 0:  # iocs in the first pass can be found by other services
+                        heuristic = 5
+                    elif heuristic < 7:
+                        heuristic = 7 if 'network' in ioc_type and ioc_type != 'network.static.domain' else 6
+                    new_ioc_res.add_line(f"Found {ioc_type.upper().replace('.', ' ')}: {safe_str(ioc)}")
+                    new_ioc_res.add_tag(ioc_type, ioc)
+        if rev_iocs:
+            new_ioc_res.add_line("New IOCs found reversed in the final layer:")
+            for ioc_type in rev_iocs:
+                for ioc in rev_iocs[ioc_type]:
+                    heuristic = max(7 if 'network' in ioc_type and ioc_type != 'network.static.domain'
+                                    else 6, heuristic)
+                    new_ioc_res.add_line(f"Found {ioc_type.upper().replace('.', ' ')}: {safe_str(ioc)}")
+                    new_ioc_res.add_tag(ioc_type, ioc)
+        if heuristic > 0:
+            new_ioc_res.set_heuristic(heuristic)
+        if new_ioc_res.body:
+            request.result.add_section(new_ioc_res)
 
-            if has_network_heur:
-                ioc_new.set_heuristic(7)
-            else:
-                ioc_new.set_heuristic(6)
-
-        if len(self.files_extracted) > 0:
+        # Report extracted files
+        if md.extracted_files:
             ext_file_res = ResultSection("The following files were extracted during the deobfuscation",
                                          heuristic=Heuristic(8), parent=request.result)
-            for extracted in self.files_extracted:
+            for extracted in md.extracted_files:
                 file_name = os.path.basename(extracted)
                 try:
                     if request.add_extracted(extracted, file_name, "File of interest deobfuscated from sample",
@@ -666,3 +555,26 @@ class DeobfuScripter(ServiceBase):
                 except MaxExtractedExceeded:
                     self.log.warning('Extraction limit exceeded while adding files of interest.')
                     break
+
+    @staticmethod
+    def _deobfuscripter_pass(layer: bytes,
+                             techniques: TechniqueList,
+                             md: DecoderWrapper,
+                             final=False) -> tuple[bytes, list[str], dict]:
+        techniques_used = []
+        for name, technique in techniques:
+            result = technique(layer)
+            if result:
+                techniques_used.append(name)
+                # Looks like it worked, continue with the new layer
+                layer = result
+        # Use multidecoder techniques and ioc tagging
+        if final:
+            tree = md.multidecoder.scan(layer)
+        else:
+            tree = md.multidecoder.scan(layer, depth=1)
+        md.extract_files(tree, 500)
+        techniques_used.extend(obfuscation_counts(tree).keys())
+        iocs = get_tree_tags(tree)  # Get IoCs for the pass
+        layer = squash_replace(layer, tree)
+        return layer, techniques_used, iocs
