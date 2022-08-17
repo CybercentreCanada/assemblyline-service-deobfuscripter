@@ -147,7 +147,8 @@ class DeobfuScripter(ServiceBase):
                     # Execute the substitution
                     substitute = substitute.replace(str1, str2)
                 # Remove the replace calls from the layer (prevent accidental substitutions in the next step)
-                substitute = substitute[:substitute.lower().index(b'.replace(')]
+                if b'.replace(' in substitute.lower():
+                    substitute = substitute[:substitute.lower().index(b'.replace(')]
                 output = output.replace(strreplace, substitute)
 
             # Process global string replace
