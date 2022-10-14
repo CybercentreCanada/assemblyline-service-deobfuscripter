@@ -459,8 +459,9 @@ class DeobfuScripter(ServiceBase):
         """ Extract scripts from html """
         objects = []
         try:
+            html = BeautifulSoup(text, 'lxml')
             for tag_type in ['object', 'embed', 'script']:
-                for s in BeautifulSoup(text, 'lxml').find_all(tag_type):
+                for s in html.find_all(tag_type):
                     objects.append(str(s).encode('utf-8'))
         except Exception as e:
             self.log.warning(f"Failure in extract_htmlscript function: {str(e)}")
@@ -536,6 +537,9 @@ class DeobfuScripter(ServiceBase):
                 layer = b"\n".join(extracted_parts).strip()
                 layers_list.append(name)
                 break
+        if len(layer.strip()) < 3:
+            # Exit immediately if no script is found
+            return
         # Save extracted scripts before deobfuscation
         before_deobfuscation = layer
 
