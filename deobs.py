@@ -129,6 +129,84 @@ class DeobfuScripter(ServiceBase):
         return output if output != text else None
 
     @staticmethod
+    def string_replace(text: bytes) -> Optional[bytes]:
+        """ Replace calls to replace() with their output """
+        if b'replace(' in text.lower():
+            # Process string with replace functions calls
+            # Such as "SaokzueofpigxoFile".replace(/ofpigx/g, "T").replace(/okzu/g, "v")
+            output = text
+            # Find all occurrences of string replace (JS)
+            for strreplace in [o[0] for o in
+                               regex.findall(rb'(["\'][^"\']+["\']((\.replace\([^)]+\))+))', output, flags=regex.I)]:
+                substitute = strreplace
+                # Extract all substitutions
+                for str1, str2 in regex.findall(rb'\.replace\([/\'"]([^,]+)[/\'\"]g?\s*,\s*[\'\"]([^)]*)[\'\"]\)',
+                                                substitute, flags=regex.I):
+                    # Execute the substitution
+                    substitute = substitute.replace(str1, str2)
+                # Remove the replace calls from the layer (prevent accidental substitutions in the next step)
+                if b'.replace(' in substitute.lower():
+                    substitute = substitute[:substitute.lower().index(b'.replace(')]
+                output = output.replace(strreplace, substitute)
+
+            # Process global string replace
+            replacements = regex.findall(rb'replace\(\s*/([^)]+)/g?, [\'"]([^\'"]*)[\'"]', output)
+            for str1, str2 in replacements:
+                output = output.replace(str1, str2)
+            # Process VB string replace
+            replacements = regex.findall(rb'Replace\(\s*["\']?([^,"\']*)["\']?\s*,\s*["\']?'
+                                         rb'([^,"\']*)["\']?\s*,\s*["\']?([^,"\']*)["\']?', output)
+            for str1, str2, str3 in replacements:
+                output = output.replace(str1, str1.replace(str2, str3))
+            output = regex.sub(rb'\.replace\(\s*/([^)]+)/g?, [\'"]([^\'"]*)[\'"]\)', b'', output)
+            if output != text:
+                return output
+        return None
+
+    def b64decode_str(self, text: bytes) -> Optional[bytes]:
+        """ Decode base64 """
+        b64str = regex.findall(b'((?:[A-Za-z0-9+/]{3,}={0,2}(?:&#[x1][A0];)?[\r]?[\n]?){6,})', text)
+        output = text
+        for bmatch in b64str:
+            s = bmatch.replace(b'\n',
+                               b'').replace(b'\r', b'').replace(b' ', b'').replace(b'&#xA;', b'').replace(b'&#10;', b'')
+            uniq_char = set(s)
+            if len(uniq_char) > 6:
+                if len(s) >= 16 and len(s) % 4 == 0:
+                    try:
+                        d = binascii.a2b_base64(s)
+                    except binascii.Error:
+                        continue
+                    m = magic.Magic(mime=True)
+                    mag = magic.Magic()
+                    ftype = m.from_buffer(d)
+                    mag_ftype = mag.from_buffer(d)
+                    sha256hash = hashlib.sha256(d).hexdigest()
+                    if sha256hash not in self.hashes:
+                        if len(d) > 500:
+                            for file_type in self.FILETYPES:
+                                if (file_type in ftype and 'octet-stream' not in ftype) or file_type in mag_ftype:
+                                    b64_file_name = f"{sha256hash[0:10]}_b64_decoded"
+                                    b64_file_path = os.path.join(self.working_directory, b64_file_name)
+                                    with open(b64_file_path, 'wb') as b64_file:
+                                        b64_file.write(d)
+                                    self.files_extracted.add(b64_file_path)
+                                    self.hashes.add(sha256hash)
+                                    break
+
+                        if len(set(d)) > 6 and all(8 < c < 127 for c in d) and len(regex.sub(rb"\s", b"", d)) > 14:
+                            output = output.replace(bmatch, d)
+                        else:
+                            # Test for ASCII seperated by \x00
+                            p = d.replace(b'\x00', b'')
+                            if len(set(p)) > 6 and all(8 < c < 127 for c in p) and len(regex.sub(rb"\s", b"", p)) > 14:
+                                output = output.replace(bmatch, p)
+
+        if output == text:
+            return None
+        return output
+
+    @staticmethod
     def vars_of_fake_arrays(text: bytes) -> Optional[bytes]:
         """ Parse variables of fake arrays """
         replacements = regex.findall(rb'var\s+([^\s=]+)\s*=\s*\[([^\]]+)\]\[(\d+)\]', text)
