@@ -100,7 +100,7 @@ class DeobfuScripter(ServiceBase):
         for fullc, c in regex.findall(rb'(chr[bw]?\(([0-9]{1,3})\))', output, regex.I):
             # noinspection PyBroadException
             try:
-                output = regex.sub(regex.escape(fullc), '"{}"'.format(chr(int(c))).encode('utf-8'), output)
+                output = regex.sub(regex.escape(fullc), f'"{chr(int(c))}"'.encode('utf-8'), output)
             except Exception:
                 continue
         if output == text:
