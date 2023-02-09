@@ -101,7 +101,7 @@ class DeobfuScripter(ServiceBase):
     @staticmethod
     def charcode_xml(text: bytes) -> Optional[bytes]:
         """ Replace XML escape sequences with the corresponding character """
-        output = regex.sub(rb'(?i)&#x([a-z0-9]{1,6};', DeobfuScripter.codepoint_sub, text)
+        output = regex.sub(rb'(?i)&#x([a-z0-9]{1,6});', DeobfuScripter.codepoint_sub, text)
         output = regex.sub(rb'&#([0-9]{1,7});', partial(DeobfuScripter.codepoint_sub, base=10), output)
         return output if output != text else None
 
