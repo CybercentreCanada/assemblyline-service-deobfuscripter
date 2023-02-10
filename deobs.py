@@ -89,13 +89,13 @@ class DeobfuScripter(ServiceBase):
     @staticmethod
     def charcode_hex(text: bytes) -> Optional[bytes]:
         """ Replace hex character codes with the corresponding characters """
-        output = regex.sub(rb'(?i)(?:\\x|0x|%)([a-z0-9]{2})', lambda m: binascii.unhexlify(m.group(1)), text)
+        output = regex.sub(rb'(?i)(?:\\x|0x|%)([a-f0-9]{2})', lambda m: binascii.unhexlify(m.group(1)), text)
         return output if output != text else None
 
     @staticmethod
     def charcode_unicode(text: bytes) -> Optional[bytes]:
         """ Replace unicode character codes with the corresponding utf-8 byte sequence"""
-        output = regex.sub(rb'(?i)(?:\\u|%u)([a-z0-9]{4})', DeobfuScripter.codepoint_sub, text)
+        output = regex.sub(rb'(?i)(?:\\u|%u)([a-f0-9]{4})', DeobfuScripter.codepoint_sub, text)
         return output if output != text else None
 
     @staticmethod
