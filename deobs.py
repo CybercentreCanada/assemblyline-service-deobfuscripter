@@ -34,9 +34,6 @@ class DeobfuScripter(ServiceBase):
         self.hashes: Set[str] = set()
         self.files_extracted: Set[str] = set()
 
-    def start(self) -> None:
-        self.log.debug("DeobfuScripter service started")
-
     # --- Support Modules ----------------------------------------------------------------------------------------------
 
     def printable_ratio(self, text: bytes) -> float:
