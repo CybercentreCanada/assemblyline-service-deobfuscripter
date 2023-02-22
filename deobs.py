@@ -46,9 +46,6 @@ class DeobfuScripter(ServiceBase):
     def __init__(self, config: Optional[Dict] = None) -> None:
         super().__init__(config)
 
-    def start(self) -> None:
-        self.log.debug("DeobfuScripter service started")
-
     # --- Support Modules ----------------------------------------------------------------------------------------------
 
     def printable_ratio(self, text: bytes) -> float:
