@@ -147,36 +147,36 @@ class DeobfuScripter(ServiceBase):
             s = bmatch.replace(b'\n',
                                b'').replace(b'\r', b'').replace(b' ', b'').replace(b'&#xA;', b'').replace(b'&#10;', b'')
             uniq_char = set(s)
-            if len(uniq_char) > 6:
-                if len(s) >= 16 and len(s) % 4 == 0:
-                    try:
-                        d = binascii.a2b_base64(s)
-                    except binascii.Error:
-                        continue
+            if len(uniq_char) <= 6 or len(s) < 16 or len(s) % 4:
+                continue
+            try:
+                d = binascii.a2b_base64(s)
+            except binascii.Error:
+                continue
+            sha256hash = hashlib.sha256(d).hexdigest()
+            if sha256hash not in self.hashes:
+                if len(d) > 500:
                     m = magic.Magic(mime=True)
                     mag = magic.Magic()
                     ftype = m.from_buffer(d)
                     mag_ftype = mag.from_buffer(d)
-                    sha256hash = hashlib.sha256(d).hexdigest()
-                    if sha256hash not in self.hashes:
-                        if len(d) > 500:
-                            for file_type in self.FILETYPES:
-                                if (file_type in ftype and 'octet-stream' not in ftype) or file_type in mag_ftype:
-                                    b64_file_name = f"{sha256hash[0:10]}_b64_decoded"
-                                    b64_file_path = os.path.join(self.working_directory, b64_file_name)
-                                    with open(b64_file_path, 'wb') as b64_file:
-                                        b64_file.write(d)
-                                    self.files_extracted.add(b64_file_path)
-                                    self.hashes.add(sha256hash)
-                                    break
+                    for file_type in self.FILETYPES:
+                        if (file_type in ftype and 'octet-stream' not in ftype) or file_type in mag_ftype:
+                            b64_file_name = f"{sha256hash[0:10]}_b64_decoded"
+                            b64_file_path = os.path.join(self.working_directory, b64_file_name)
+                            with open(b64_file_path, 'wb') as b64_file:
+                                b64_file.write(d)
+                            self.files_extracted.add(b64_file_path)
+                            self.hashes.add(sha256hash)
+                            break
 
-                        if len(set(d)) > 6 and all(8 < c < 127 for c in d) and len(regex.sub(rb"\s", b"", d)) > 14:
-                            output = output.replace(bmatch, d)
-                        else:
-                            # Test for ASCII seperated by \x00
-                            p = d.replace(b'\x00', b'')
-                            if len(set(p)) > 6 and all(8 < c < 127 for c in p) and len(regex.sub(rb"\s", b"", p)) > 14:
-                                output = output.replace(bmatch, p)
+                if len(set(d)) > 6 and all(8 < c < 127 for c in d) and len(regex.sub(rb"\s", b"", d)) > 14:
+                    output = output.replace(bmatch, d)
+                else:
+                    # Test for ASCII seperated by \x00
+                    p = d.replace(b'\x00', b'')
+                    if len(set(p)) > 6 and all(8 < c < 127 for c in p) and len(regex.sub(rb"\s", b"", p)) > 14:
+                        output = output.replace(bmatch, p)
 
         if output == text:
             return None
