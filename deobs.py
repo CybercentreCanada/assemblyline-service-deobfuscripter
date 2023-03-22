@@ -141,11 +141,14 @@ class DeobfuScripter(ServiceBase):
 
     def b64decode_str(self, text: bytes) -> Optional[bytes]:
         """ Decode base64 """
-        b64str = regex.findall(b'((?:[A-Za-z0-9+/]{3,}={0,2}(?:&#[x1][A0];)?[\r]?[\n]?){6,})', text)
+        b64str: list[bytes] = regex.findall(b'((?:[A-Za-z0-9+/]{3,}={0,2}(?:&#[x1][A0];)?[\r]?[\n]?){6,})', text)
         output = text
         for bmatch in b64str:
-            s = bmatch.replace(b'\n',
-                               b'').replace(b'\r', b'').replace(b' ', b'').replace(b'&#xA;', b'').replace(b'&#10;', b'')
+            s = (bmatch.replace(b'\n', b'')
+                       .replace(b'\r', b'')
+                       .replace(b' ', b'')
+                       .replace(b'&#xA;', b'')
+                       .replace(b'&#10;', b''))
             uniq_char = set(s)
             if len(uniq_char) <= 6 or len(s) < 16 or len(s) % 4:
                 continue
