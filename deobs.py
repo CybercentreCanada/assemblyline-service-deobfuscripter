@@ -141,8 +141,21 @@ class DeobfuScripter(ServiceBase):
 
     def b64decode_str(self, text: bytes) -> Optional[bytes]:
         """ Decode base64 """
-        b64str: list[bytes] = regex.findall(b'((?:[A-Za-z0-9+/]{3,}={0,2}(?:&#[x1][A0];)?[\r]?[\n]?){6,})', text)
         output = text
+
+        head: bytes
+        bmatch: bytes
+        tail: bytes
+        for head, bmatch, tail in regex.findall(rb'((?:atob\()+)\'([A-Za-z0-9+/]={0,2})\'(\)+)', text):
+            iters = min(len(head)//5, len(tail))
+            for _ in range(iters):
+                try:
+                    d = binascii.a2b_base64(bmatch)
+                except binascii.Error:
+                    break
+            output.replace(b'atob('*iters + b"'" + bmatch + b"'" + b')'*iters, b"'" + d + b"'")
+
+        b64str: list[bytes] = regex.findall(b'((?:[A-Za-z0-9+/]{3,}={0,2}(?:&#[x1][A0];)?[\r]?[\n]?){6,})', text)
         for bmatch in b64str:
             s = (bmatch.replace(b'\n', b'')
                        .replace(b'\r', b'')
