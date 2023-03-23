@@ -69,12 +69,14 @@ class DeobfuScripter(ServiceBase):
     @staticmethod
     def charcode(text: bytes) -> Optional[bytes]:
         """ Replace character codes with the corresponding characters """
-        # To do: what decimal encodings exist in scripting languages and how to decode them?
+        # To do: something to handle powershell bytes syntax
+        output = regex.sub(rb'\\(\d{1,3})', lambda m: bytes((int(m.group(1)),)), text)
+        return output if output != text else None
 
     @staticmethod
     def charcode_hex(text: bytes) -> Optional[bytes]:
         """ Replace hex character codes with the corresponding characters """
-        output = regex.sub(rb'(?i)(?:\\x|0x|%)([a-f0-9]{2})', lambda m: binascii.unhexlify(m.group(1)), text)
+        output = regex.sub(rb'(?i)(?:\\x|%)([a-f0-9]{2})', lambda m: binascii.unhexlify(m.group(1)), text)
         return output if output != text else None
 
     @staticmethod
@@ -88,6 +90,12 @@ class DeobfuScripter(ServiceBase):
         """ Replace XML escape sequences with the corresponding character """
         output = regex.sub(rb'(?i)&#x([a-z0-9]{1,6});', DeobfuScripter.codepoint_sub, text)
         output = regex.sub(rb'&#([0-9]{1,7});', partial(DeobfuScripter.codepoint_sub, base=10), output)
+        return output if output != text else None
+
+    @staticmethod
+    def hex_constant(text: bytes) -> Optional[bytes]:
+        """ Replace hexadecimal integer constants with decimal ones"""
+        output = regex.sub(rb'(?i)\b0x([a-f0-9]{0,16})\b', lambda m: str(int(m.group(1), 16)).encode(), text)
         return output if output != text else None
 
     @staticmethod
@@ -490,9 +498,11 @@ class DeobfuScripter(ServiceBase):
             ('Concat strings', self.concat_strings),
             ('MSWord macro vars', self.mswordmacro_vars),
             ('Powershell vars', self.powershell_vars),
+            ('Charcodes', self.charcode),
             ('Hex Charcodes', self.charcode_hex),
             ('Unicode Charcodes', self.charcode_unicode),
-            ('XML Charcodes', self.charcode_xml)
+            ('XML Charcodes', self.charcode_xml),
+            ('Hex Int Constants', self.hex_constant),
         ]
         second_pass.extend(first_pass)
         final_pass: TechniqueList = []
