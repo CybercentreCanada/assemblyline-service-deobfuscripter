@@ -146,17 +146,20 @@ class DeobfuScripter(ServiceBase):
         head: bytes
         bmatch: bytes
         tail: bytes
-        for head, bmatch, tail in regex.findall(rb'((?:atob\()+)\'([A-Za-z0-9+/]={0,2})\'(\)+)', text):
+        for head, bmatch, tail in regex.findall(rb'((?:atob\()+)\'([A-Za-z0-9+/]+={0,2})\'(\)+)', text):
             iters = min(len(head)//5, len(tail))
+            d = bmatch
             for _ in range(iters):
                 try:
-                    d = binascii.a2b_base64(bmatch)
+                    d = binascii.a2b_base64(d)
                 except binascii.Error:
                     break
-            output.replace(b'atob('*iters + b"'" + bmatch + b"'" + b')'*iters, b"'" + d + b"'")
+            output = output.replace(b'atob('*iters + b"'" + bmatch + b"'" + b')'*iters, b"'" + d + b"'")
 
         b64str: list[bytes] = regex.findall(b'((?:[A-Za-z0-9+/]{3,}={0,2}(?:&#[x1][A0];)?[\r]?[\n]?){6,})', text)
         for bmatch in b64str:
+            if bmatch not in output:
+                continue  # was already processed by atob
             s = (bmatch.replace(b'\n', b'')
                        .replace(b'\r', b'')
                        .replace(b' ', b'')
