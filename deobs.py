@@ -81,12 +81,19 @@ class DeobfuScripter(ServiceBase):
     @staticmethod
     def charcode(text: bytes) -> Optional[bytes]:
         """ Replace character codes with the corresponding characters """
-        # To do: what decimal encodings exist in scripting languages and how to decode them?
+        # Todo: something to handle powershell bytes syntax
 
     @staticmethod
     def charcode_hex(text: bytes) -> Optional[bytes]:
         """ Replace hex character codes with the corresponding characters """
-        output = regex.sub(rb'(?i)(?:\\x|0x|%)([a-f0-9]{2})', lambda m: binascii.unhexlify(m.group(1)), text)
+        output = regex.sub(rb'(?i)(?:\\x|%)([a-f0-9]{2})', lambda m: binascii.unhexlify(m.group(1)), text)
+        return output if output != text else None
+
+    # Todo: find a way to prevent charcode_oct from mangling windows filepaths with sections that start with 0-7
+    @staticmethod
+    def charcode_oct(text: bytes) -> Optional[bytes]:
+        """ Replace octal character codes with the corresponding characters """
+        output = regex.sub(rb'\\([0-7]{1,3})', partial(DeobfuScripter.codepoint_sub, base=8), text)
         return output if output != text else None
 
     @staticmethod
@@ -100,6 +107,12 @@ class DeobfuScripter(ServiceBase):
         """ Replace XML escape sequences with the corresponding character """
         output = regex.sub(rb'(?i)&#x([a-z0-9]{1,6});', DeobfuScripter.codepoint_sub, text)
         output = regex.sub(rb'&#([0-9]{1,7});', partial(DeobfuScripter.codepoint_sub, base=10), output)
+        return output if output != text else None
+
+    @staticmethod
+    def hex_constant(text: bytes) -> Optional[bytes]:
+        """ Replace hexadecimal integer constants with decimal ones"""
+        output = regex.sub(rb'(?i)\b0x([a-f0-9]{1,16})\b', lambda m: str(int(m.group(1), 16)).encode('utf-8'), text)
         return output if output != text else None
 
     @staticmethod
@@ -472,8 +485,10 @@ class DeobfuScripter(ServiceBase):
             ('MSWord macro vars', self.mswordmacro_vars),
             ('Powershell vars', self.powershell_vars),
             ('Hex Charcodes', self.charcode_hex),
+            # ('Octal Charcodes', self.charcode_oct),
             ('Unicode Charcodes', self.charcode_unicode),
-            ('XML Charcodes', self.charcode_xml)
+            ('XML Charcodes', self.charcode_xml),
+            ('Hex Int Constants', self.hex_constant),
         ]
         second_pass.extend(first_pass)
         final_pass: TechniqueList = []
