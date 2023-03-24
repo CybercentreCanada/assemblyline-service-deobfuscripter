@@ -69,14 +69,19 @@ class DeobfuScripter(ServiceBase):
     @staticmethod
     def charcode(text: bytes) -> Optional[bytes]:
         """ Replace character codes with the corresponding characters """
-        # To do: something to handle powershell bytes syntax
-        output = regex.sub(rb'\\(\d{1,3})', lambda m: bytes((int(m.group(1)),)), text)
-        return output if output != text else None
+        # Todo: something to handle powershell bytes syntax
 
     @staticmethod
     def charcode_hex(text: bytes) -> Optional[bytes]:
         """ Replace hex character codes with the corresponding characters """
         output = regex.sub(rb'(?i)(?:\\x|%)([a-f0-9]{2})', lambda m: binascii.unhexlify(m.group(1)), text)
+        return output if output != text else None
+
+    # Todo: find a way to prevent charcode_oct from mangling windows filepaths with sections that start with 0-7
+    @staticmethod
+    def charcode_oct(text: bytes) -> Optional[bytes]:
+        """ Replace octal character codes with the corresponding characters """
+        output = regex.sub(rb'\\([0-7]{1,3})', partial(DeobfuScripter.codepoint_sub, base=8), text)
         return output if output != text else None
 
     @staticmethod
@@ -95,7 +100,7 @@ class DeobfuScripter(ServiceBase):
     @staticmethod
     def hex_constant(text: bytes) -> Optional[bytes]:
         """ Replace hexadecimal integer constants with decimal ones"""
-        output = regex.sub(rb'(?i)\b0x([a-f0-9]{0,16})\b', lambda m: str(int(m.group(1), 16)).encode(), text)
+        output = regex.sub(rb'(?i)\b0x([a-f0-9]{1,16})\b', lambda m: str(int(m.group(1), 16)).encode('utf-8'), text)
         return output if output != text else None
 
     @staticmethod
@@ -498,8 +503,8 @@ class DeobfuScripter(ServiceBase):
             ('Concat strings', self.concat_strings),
             ('MSWord macro vars', self.mswordmacro_vars),
             ('Powershell vars', self.powershell_vars),
-            ('Charcodes', self.charcode),
             ('Hex Charcodes', self.charcode_hex),
+            # ('Octal Charcodes', self.charcode_oct),
             ('Unicode Charcodes', self.charcode_unicode),
             ('XML Charcodes', self.charcode_xml),
             ('Hex Int Constants', self.hex_constant),
