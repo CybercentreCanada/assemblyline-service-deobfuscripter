@@ -602,7 +602,7 @@ class DeobfuScripter(ServiceBase):
             with open(file_path, 'wb+') as f:
                 f.write(clean)
                 self.log.debug(f"Submitted dropped file for analysis: {file_path}")
-            request.add_extracted(file_path, file_name, "Final deobfuscation layer")
+            request.add_supplementary(file_path, file_name, "Final deobfuscated layer")
 
         ResultSection(f"First {byte_count} bytes of the final layer:", body=safe_str(clean[:byte_count]),
                       body_format=BODY_FORMAT.MEMORY_DUMP, parent=request.result)
