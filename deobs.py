@@ -5,7 +5,6 @@ from __future__ import annotations
 import binascii
 import hashlib
 import os
-
 from collections import Counter
 from functools import partial
 from itertools import chain
@@ -13,14 +12,12 @@ from typing import Callable, Dict, List, Optional, Set, Tuple
 
 import magic
 import regex
-
-from bs4 import BeautifulSoup
-
 from assemblyline.common.str_utils import safe_str
-from assemblyline_v4_service.common.balbuzard.patterns import PatternMatch
+from assemblyline_service_utilities.common.balbuzard.patterns import PatternMatch
 from assemblyline_v4_service.common.base import ServiceBase
-from assemblyline_v4_service.common.request import ServiceRequest, MaxExtractedExceeded
-from assemblyline_v4_service.common.result import Result, ResultSection, BODY_FORMAT, Heuristic
+from assemblyline_v4_service.common.request import MaxExtractedExceeded, ServiceRequest
+from assemblyline_v4_service.common.result import BODY_FORMAT, Heuristic, Result, ResultSection
+from bs4 import BeautifulSoup
 
 
 class DeobfuScripter(ServiceBase):

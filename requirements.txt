@@ -1,0 +1,4 @@
+assemblyline-service-utilities
+beautifulsoup4
+lxml
+regex
