@@ -4,22 +4,18 @@ from __future__ import annotations
 
 import binascii
 import os
-
 from collections import Counter, defaultdict
 from functools import partial
 from typing import Callable, Dict, List, Optional, Tuple
 
 import regex
-
-from bs4 import BeautifulSoup
-from multidecoder.query import squash_replace, obfuscation_counts
-
 from assemblyline.common.str_utils import safe_str
-from assemblyline_v4_service.common.extractor.decode_wrapper import DecoderWrapper, get_tree_tags
+from assemblyline_service_utilities.common.extractor.decode_wrapper import DecoderWrapper, get_tree_tags
 from assemblyline_v4_service.common.base import ServiceBase
-from assemblyline_v4_service.common.request import ServiceRequest, MaxExtractedExceeded
-from assemblyline_v4_service.common.result import Result, ResultSection, BODY_FORMAT, Heuristic
-
+from assemblyline_v4_service.common.request import MaxExtractedExceeded, ServiceRequest
+from assemblyline_v4_service.common.result import BODY_FORMAT, Heuristic, Result, ResultSection
+from bs4 import BeautifulSoup
+from multidecoder.query import obfuscation_counts, squash_replace
 
 # Type declarations
 TechniqueList = List[Tuple[str, Callable[[bytes], Optional[bytes]]]]
