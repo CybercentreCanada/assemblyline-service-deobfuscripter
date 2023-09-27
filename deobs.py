@@ -4,21 +4,18 @@ from __future__ import annotations
 
 import binascii
 import os
-
 from collections import Counter, defaultdict
+from functools import partial
 from typing import Callable, Dict, List, Optional, Tuple
 
 import regex
-
-from bs4 import BeautifulSoup
-from multidecoder.query import squash_replace, obfuscation_counts
-
 from assemblyline.common.str_utils import safe_str
-from assemblyline_v4_service.common.extractor.decode_wrapper import DecoderWrapper, get_tree_tags
+from assemblyline_service_utilities.common.extractor.decode_wrapper import DecoderWrapper, get_tree_tags
 from assemblyline_v4_service.common.base import ServiceBase
-from assemblyline_v4_service.common.request import ServiceRequest, MaxExtractedExceeded
-from assemblyline_v4_service.common.result import Result, ResultSection, BODY_FORMAT, Heuristic
-
+from assemblyline_v4_service.common.request import MaxExtractedExceeded, ServiceRequest
+from assemblyline_v4_service.common.result import BODY_FORMAT, Heuristic, Result, ResultSection
+from bs4 import BeautifulSoup
+from multidecoder.query import obfuscation_counts, squash_replace
 
 # Type declarations
 TechniqueList = List[Tuple[str, Callable[[bytes], Optional[bytes]]]]
@@ -45,9 +42,6 @@ class DeobfuScripter(ServiceBase):
     def __init__(self, config: Optional[Dict] = None) -> None:
         super().__init__(config)
 
-    def start(self) -> None:
-        self.log.debug("DeobfuScripter service started")
-
     # --- Support Modules ----------------------------------------------------------------------------------------------
 
     def printable_ratio(self, text: bytes) -> float:
@@ -55,78 +49,117 @@ class DeobfuScripter(ServiceBase):
         return float(float(len(text.translate(None, self.BINCHARS))) / float(len(text)))
 
     @staticmethod
+    def encode_codepoint(codepoint: int) -> bytes:
+        """ Returns the utf-8 encoding of a unicode codepoint """
+        return chr(codepoint).encode('utf-8')
+
+    @staticmethod
+    def codepoint_sub(match: regex.Match, base: int = 16) -> bytes:
+        """ Replace method for unicode codepoint regex substitutions.
+
+        Args:
+            match: The regex match object with the text of the unicode codepoint value as group 1.
+            base: The base that the unicode codepoint is represented in (defaults to hexadecimal)
+        Returns:
+            - The utf-8 byte sequence for the codepoint if it can be decoded.
+            - The original match text if there is a decoding error.
+        """
+        try:
+            return DeobfuScripter.encode_codepoint(int(match.group(1), base))
+        except ValueError:
+            return match.group(0)  # No replacement if decoding fails
+
+    @staticmethod
     def add1b(s: bytes, k: int) -> bytes:
         """ Add k to each byte of s """
         return bytes([(c + k) & 0xff for c in s])
 
-    def charcode(self, text: bytes) -> Optional[bytes]:
+    @staticmethod
+    def charcode(text: bytes) -> Optional[bytes]:
         """ Replace character codes with the corresponding characters """
-        arrayofints = list(filter(lambda n: n < 256,
-                                  map(int, regex.findall(r'(\d+)', str(regex.findall(rb'\D{1,2}\d{2,3}', text))))))
-        if len(arrayofints) > 20:
-            output = bytes(arrayofints)
-            if self.printable_ratio(output) > .75 and (float(len(output)) / float(len(text))) > .10:
-                # if the output is mostly readable and big enough
-                return output
-
-        return None
+        # Todo: something to handle powershell bytes syntax
 
     @staticmethod
     def charcode_hex(text: bytes) -> Optional[bytes]:
         """ Replace hex character codes with the corresponding characters """
+        output = regex.sub(rb'(?i)(?:\\x|%)([a-f0-9]{2})', lambda m: binascii.unhexlify(m.group(1)), text)
+        return output if output != text else None
+
+    # Todo: find a way to prevent charcode_oct from mangling windows filepaths with sections that start with 0-7
+    @staticmethod
+    def charcode_oct(text: bytes) -> Optional[bytes]:
+        """ Replace octal character codes with the corresponding characters """
+        output = regex.sub(rb'\\([0-7]{1,3})', partial(DeobfuScripter.codepoint_sub, base=8), text)
+        return output if output != text else None
+
+    @staticmethod
+    def charcode_unicode(text: bytes) -> Optional[bytes]:
+        """ Replace unicode character codes with the corresponding utf-8 byte sequence"""
+        output = regex.sub(rb'(?i)(?:\\u|%u)([a-f0-9]{4})', DeobfuScripter.codepoint_sub, text)
+        return output if output != text else None
+
+    @staticmethod
+    def charcode_xml(text: bytes) -> Optional[bytes]:
+        """ Replace XML escape sequences with the corresponding character """
+        output = regex.sub(rb'(?i)&#x([a-z0-9]{1,6});', DeobfuScripter.codepoint_sub, text)
+        output = regex.sub(rb'&#([0-9]{1,7});', partial(DeobfuScripter.codepoint_sub, base=10), output)
+        return output if output != text else None
+
+    @staticmethod
+    def hex_constant(text: bytes) -> Optional[bytes]:
+        """ Replace hexadecimal integer constants with decimal ones"""
+        output = regex.sub(rb'(?i)\b0x([a-f0-9]{1,16})\b', lambda m: str(int(m.group(1), 16)).encode('utf-8'), text)
+        return output if output != text else None
+
+    @staticmethod
+    def chr_decode(text: bytes) -> Optional[bytes]:
+        """ Replace calls to chr with the corresponding character """
         output = text
-        enc_str = [b'\\u', b'%u', b'\\x', b'0x']
-
-        for encoding in enc_str:
-            char_len = [(16, regex.compile(rb'(?:' + regex.escape(encoding) + b'[A-Fa-f0-9]{16}){2,}')),
-                        (8, regex.compile(rb'(?:' + regex.escape(encoding) + b'[A-Fa-f0-9]{8}){2,}')),
-                        (4, regex.compile(rb'(?:' + regex.escape(encoding) + b'[A-Fa-f0-9]{4}){2,}')),
-                        (2, regex.compile(rb'(?:' + regex.escape(encoding) + b'[A-Fa-f0-9]{2}){2,}'))]
-
-            for r in char_len:
-                hexchars = set(regex.findall(r[1], text))
-
-                for hex_char in hexchars:
-                    data = hex_char
-                    decoded = b''
-                    if r[0] == 2:
-                        while data != b'':
-                            decoded += binascii.a2b_hex(data[2:4])
-                            data = data[4:]
-                    if r[0] == 4:
-                        while data != b'':
-                            decoded += binascii.a2b_hex(data[4:6]) + binascii.a2b_hex(data[2:4])
-                            data = data[6:]
-                    if r[0] == 8:
-                        while data != b'':
-                            decoded += binascii.a2b_hex(data[8:10]) + binascii.a2b_hex(data[6:8]) + \
-                                binascii.a2b_hex(data[4:6]) + binascii.a2b_hex(data[2:4])
-                            data = data[10:]
-                    if r[0] == 16:
-                        while data != b'':
-                            decoded += binascii.a2b_hex(data[16:18]) + binascii.a2b_hex(data[14:16]) + \
-                                binascii.a2b_hex(data[12:14]) + binascii.a2b_hex(data[10:12]) + \
-                                binascii.a2b_hex(data[8:10]) + binascii.a2b_hex(data[6:8]) + \
-                                binascii.a2b_hex(data[4:6]) + binascii.a2b_hex(data[2:4])
-                            data = data[18:]
-
-                    # Remove trailing NULL bytes
-                    final_dec = regex.sub(b'[\x00]*$', b'', decoded)
-                    output = output.replace(hex_char, final_dec)
-
+        for fullc, c in regex.findall(rb'(chr[bw]?\(([0-9]{1,3})\))', output, regex.I):
+            # noinspection PyBroadException
+            try:
+                output = regex.sub(regex.escape(fullc), f'"{chr(int(c))}"'.encode('utf-8'), output)
+            except Exception:
+                continue
         if output == text:
             return None
         return output
 
     @staticmethod
-    def xml_unescape(text: bytes) -> Optional[bytes]:
-        """ Replace XML escape sequences with the corresponding character """
-        output = text
-        for hex in regex.findall(rb'(?i)&#x[a-z0-9]{2};', text):
-            output = output.replace(hex, binascii.unhexlify(hex[3:-1]))
-        for escape in regex.findall(rb'&#(?:25[0-5]|2[0-4][0-9]|[0-1]?[0-9]{1,2});', text):
-            output = output.replace(escape, int(escape[2:-1]).to_bytes(1, 'big'))
-        return output if output != text else None
+    def string_replace(text: bytes) -> Optional[bytes]:
+        """ Replace calls to replace() with their output """
+        if b'replace(' in text.lower():
+            # Process string with replace functions calls
+            # Such as "SaokzueofpigxoFile".replace(/ofpigx/g, "T").replace(/okzu/g, "v")
+            output = text
+            # Find all occurrences of string replace (JS)
+            for strreplace in [o[0] for o in
+                               regex.findall(rb'(["\'][^"\']+["\']((\.replace\([^)]+\))+))', output, flags=regex.I)]:
+                substitute = strreplace
+                # Extract all substitutions
+                for str1, str2 in regex.findall(rb'\.replace\([/\'"]([^,]+)[/\'\"]g?\s*,\s*[\'\"]([^)]*)[\'\"]\)',
+                                                substitute, flags=regex.I):
+                    # Execute the substitution
+                    substitute = substitute.replace(str1, str2)
+                # Remove the replace calls from the layer (prevent accidental substitutions in the next step)
+                if b'.replace(' in substitute.lower():
+                    substitute = substitute[:substitute.lower().index(b'.replace(')]
+                output = output.replace(strreplace, substitute)
+
+            # Process global string replace
+            replacements = regex.findall(rb'replace\(\s*/([^)]+)/g?, [\'"]([^\'"]*)[\'"]', output)
+            for str1, str2 in replacements:
+                output = output.replace(str1, str2)
+            # Process VB string replace
+            replacements = regex.findall(rb'Replace\(\s*["\']?([^,"\']*)["\']?\s*,\s*["\']?'
+                                         rb'([^,"\']*)["\']?\s*,\s*["\']?([^,"\']*)["\']?', output)
+            for str1, str2, str3 in replacements:
+                output = output.replace(str1, str1.replace(str2, str3))
+            output = regex.sub(rb'\.replace\(\s*/([^)]+)/g?, [\'"]([^\'"]*)[\'"]\)', b'', output)
+            if output != text:
+                return output
+        return None
+
 
     @staticmethod
     def vars_of_fake_arrays(text: bytes) -> Optional[bytes]:
@@ -357,8 +390,9 @@ class DeobfuScripter(ServiceBase):
         """ Extract scripts from html """
         objects = []
         try:
+            html = BeautifulSoup(text, 'lxml')
             for tag_type in ['object', 'embed', 'script']:
-                for s in BeautifulSoup(text, 'lxml').find_all(tag_type):
+                for s in html.find_all(tag_type):
                     objects.append(str(s).encode('utf-8'))
         except Exception as e:
             self.log.warning(f"Failure in extract_htmlscript function: {str(e)}")
@@ -385,13 +419,14 @@ class DeobfuScripter(ServiceBase):
         second_pass: TechniqueList = [
             ('MSWord macro vars', self.mswordmacro_vars),
             ('Powershell vars', self.powershell_vars),
-            ('Charcode hex', self.charcode_hex),
-            ('XML unescape', self.xml_unescape)
+            ('Hex Charcodes', self.charcode_hex),
+            # ('Octal Charcodes', self.charcode_oct),
+            ('Unicode Charcodes', self.charcode_unicode),
+            ('XML Charcodes', self.charcode_xml),
+            ('Hex Int Constants', self.hex_constant),
         ]
         second_pass.extend(first_pass)
-        final_pass: TechniqueList = [
-            ('Charcode', self.charcode),
-        ]
+        final_pass: TechniqueList = []
         final_pass.extend(second_pass)
 
         code_extracts = [
@@ -408,7 +443,7 @@ class DeobfuScripter(ServiceBase):
                 layer = b"\n".join(extracted_parts).strip()
                 extract_res.add_line(name)
                 break
-        if len(layer.strip()) < 2:
+        if len(layer.strip()) < 3:
             return  # No script present in file
         if request.file_type == 'code/ps1':
             sig = regex.search(
@@ -431,7 +466,6 @@ class DeobfuScripter(ServiceBase):
                     pass
         if extract_res.body:
             request.result.add_section(extract_res)
-
         # Save extracted scripts before deobfuscation
         before_deobfuscation = layer
 
@@ -496,14 +530,14 @@ class DeobfuScripter(ServiceBase):
         if request.deep_scan or (len(clean) > 1000 and heuristic.score >= 500) or seen_iocs:
             # Save extracted file
             byte_count = 500
-            file_name = f"{os.path.basename(request.file_name)}_decoded_final"
+            file_name = f"{request.sha256}_decoded_final"
             file_path = os.path.join(self.working_directory, file_name)
             # Ensure directory exists before write
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
             with open(file_path, 'wb+') as f:
                 f.write(clean)
                 self.log.debug(f"Submitted dropped file for analysis: {file_path}")
-            request.add_extracted(file_path, file_name, "Final deobfuscation layer")
+            request.add_supplementary(file_path, file_name, "Final deobfuscated layer")
 
         ResultSection(f"First {byte_count} bytes of the final layer:", body=safe_str(clean[:byte_count]),
                       body_format=BODY_FORMAT.MEMORY_DUMP, parent=request.result)
