@@ -1,4 +1,4 @@
-assemblyline-service-utilities
+assemblyline-service-utilities>=4.5,<4.6
 beautifulsoup4
 lxml
 regex
