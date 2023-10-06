@@ -15,14 +15,15 @@ from assemblyline_v4_service.common.base import ServiceBase
 from assemblyline_v4_service.common.request import MaxExtractedExceeded, ServiceRequest
 from assemblyline_v4_service.common.result import BODY_FORMAT, Heuristic, Result, ResultSection
 from bs4 import BeautifulSoup
-from multidecoder.query import obfuscation_counts, squash_replace
 
 # Type declarations
 TechniqueList = List[Tuple[str, Callable[[bytes], Optional[bytes]]]]
 
 
-def filter_iocs(iocs, original: bytes, seen: set, reversed=False):
-    new_iocs = defaultdict(set)
+def filter_iocs(
+    iocs: dict[str, set[bytes]], original: bytes, seen: set[bytes], reversed: object = False
+) -> dict[str, set[bytes]]:
+    new_iocs: defaultdict[str, set[bytes]] = defaultdict(set)
     for ioc_type in iocs:
         for ioc in iocs[ioc_type]:
             prefix = b"/".join(ioc.split(b"/", 3)[:3]) if ioc_type == "network.static.uri" else ioc
@@ -40,7 +41,7 @@ class DeobfuScripter(ServiceBase):
     VALIDCHARS = b" 0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
     BINCHARS = bytes(list(set(range(0, 256)) - set(VALIDCHARS)))
 
-    def __init__(self, config: Optional[Dict] = None) -> None:
+    def __init__(self, config: dict | None = None) -> None:
         super().__init__(config)
 
     # --- Support Modules ----------------------------------------------------------------------------------------------
@@ -55,7 +56,7 @@ class DeobfuScripter(ServiceBase):
         return chr(codepoint).encode("utf-8")
 
     @staticmethod
-    def codepoint_sub(match: regex.Match, base: int = 16) -> bytes:
+    def codepoint_sub(match: regex.Match[bytes], base: int = 16) -> bytes:
         """Replace method for unicode codepoint regex substitutions.
 
         Args:
@@ -494,7 +495,7 @@ class DeobfuScripter(ServiceBase):
         before_deobfuscation = layer
 
         # --- Stage 2: Deobsfucation ------------------------------------------------------------------------------
-        seen_iocs = set()
+        seen_iocs: set[bytes] = set()
         passes: dict[int, tuple[list[str], dict[str, set[bytes]]]] = {}
         techniques = first_pass
         n_pass = 0  # Ensure n_pass is bound outside of the loop
@@ -545,7 +546,7 @@ class DeobfuScripter(ServiceBase):
             "De-obfuscation steps taken by DeobsfuScripter", parent=request.result, heuristic=heuristic
         )
 
-        tech_count = Counter()
+        tech_count: Counter[str] = Counter()
         for p in passes.values():
             tech_count.update(p[0])
         for tech, count in tech_count.items():
@@ -625,8 +626,8 @@ class DeobfuScripter(ServiceBase):
 
     @staticmethod
     def _deobfuscripter_pass(
-        layer: bytes, techniques: TechniqueList, md: DecoderWrapper, final=False
-    ) -> tuple[bytes, list[str], dict]:
+        layer: bytes, techniques: TechniqueList, md: DecoderWrapper, final: object = False
+    ) -> tuple[bytes, list[str], dict[str, set[bytes]]]:
         techniques_used = []
         for name, technique in techniques:
             result = technique(layer)
@@ -640,7 +641,9 @@ class DeobfuScripter(ServiceBase):
         else:
             tree = md.multidecoder.scan(layer, depth=1)
         md.extract_files(tree, 500)
-        techniques_used.extend(obfuscation_counts(tree).keys())
+        obfuscations = set(node.obfuscation for node in tree)
+        obfuscations.discard(b"")
+        techniques_used.extend(obfuscations)
         iocs = get_tree_tags(tree)  # Get IoCs for the pass
-        layer = squash_replace(layer, tree)
+        layer = tree.flatten()
         return layer, techniques_used, iocs
