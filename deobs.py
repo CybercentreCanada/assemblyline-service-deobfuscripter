@@ -1,4 +1,4 @@
-""" DeobfuScripter: Script Deobfuscation Service """
+"""DeobfuScripter: Script Deobfuscation Service."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import binascii
 import os
 from collections import Counter, defaultdict
 from functools import partial
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Optional
 
 import regex
 from assemblyline.common.str_utils import safe_str
@@ -17,12 +17,21 @@ from assemblyline_v4_service.common.result import BODY_FORMAT, Heuristic, Result
 from bs4 import BeautifulSoup
 
 # Type declarations
-TechniqueList = List[Tuple[str, Callable[[bytes], Optional[bytes]]]]
+TechniqueList = list[tuple[str, Callable[[bytes], Optional[bytes]]]]
 
 
 def filter_iocs(
-    iocs: dict[str, set[bytes]], original: bytes, seen: set[bytes], reversed: object = False
+    iocs: dict[str, set[bytes]],
+    original: bytes,
+    seen: set[bytes],
+    *,
+    reversed: object = False,
 ) -> dict[str, set[bytes]]:
+    """Filter IOCs against the original text and those already found.
+
+    IOCs are filtered if they are found in original or are in seen.
+    network.static.uri tags are filtered based on segments before the path only.
+    """
     new_iocs: defaultdict[str, set[bytes]] = defaultdict(set)
     for ioc_type in iocs:
         for ioc in iocs[ioc_type]:
@@ -36,10 +45,10 @@ def filter_iocs(
 
 
 class DeobfuScripter(ServiceBase):
-    """Service for deobfuscating scripts"""
+    """Service for deobfuscating scripts."""
 
     VALIDCHARS = b" 0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
-    BINCHARS = bytes(list(set(range(0, 256)) - set(VALIDCHARS)))
+    BINCHARS = bytes(list(set(range(256)) - set(VALIDCHARS)))
 
     def __init__(self, config: dict | None = None) -> None:
         super().__init__(config)
@@ -47,12 +56,12 @@ class DeobfuScripter(ServiceBase):
     # --- Support Modules ----------------------------------------------------------------------------------------------
 
     def printable_ratio(self, text: bytes) -> float:
-        """Calcuate the ratio of printable characters to total characters in text"""
+        """Calcuate the ratio of printable characters to total characters in text."""
         return float(float(len(text.translate(None, self.BINCHARS))) / float(len(text)))
 
     @staticmethod
     def encode_codepoint(codepoint: int) -> bytes:
-        """Returns the utf-8 encoding of a unicode codepoint"""
+        """Get the encoding from unicode codepoint."""
         return chr(codepoint).encode("utf-8")
 
     @staticmethod
@@ -62,6 +71,7 @@ class DeobfuScripter(ServiceBase):
         Args:
             match: The regex match object with the text of the unicode codepoint value as group 1.
             base: The base that the unicode codepoint is represented in (defaults to hexadecimal)
+
         Returns:
             - The utf-8 byte sequence for the codepoint if it can be decoded.
             - The original match text if there is a decoding error.
@@ -73,49 +83,49 @@ class DeobfuScripter(ServiceBase):
 
     @staticmethod
     def add1b(s: bytes, k: int) -> bytes:
-        """Add k to each byte of s"""
+        """Add k to each byte of s."""
         return bytes([(c + k) & 0xFF for c in s])
 
     @staticmethod
-    def charcode(text: bytes) -> Optional[bytes]:
-        """Replace character codes with the corresponding characters"""
+    def charcode(text: bytes) -> bytes | None:
+        """Replace character codes with the corresponding characters."""
         # Todo: something to handle powershell bytes syntax
 
     @staticmethod
-    def charcode_hex(text: bytes) -> Optional[bytes]:
-        """Replace hex character codes with the corresponding characters"""
+    def charcode_hex(text: bytes) -> bytes | None:
+        """Replace hex character codes with the corresponding characters."""
         output = regex.sub(rb"(?i)(?:\\x|%)([a-f0-9]{2})", lambda m: binascii.unhexlify(m.group(1)), text)
         return output if output != text else None
 
     # Todo: find a way to prevent charcode_oct from mangling windows filepaths with sections that start with 0-7
     @staticmethod
-    def charcode_oct(text: bytes) -> Optional[bytes]:
-        """Replace octal character codes with the corresponding characters"""
+    def charcode_oct(text: bytes) -> bytes | None:
+        """Replace octal character codes with the corresponding characters."""
         output = regex.sub(rb"\\([0-7]{1,3})", partial(DeobfuScripter.codepoint_sub, base=8), text)
         return output if output != text else None
 
     @staticmethod
-    def charcode_unicode(text: bytes) -> Optional[bytes]:
-        """Replace unicode character codes with the corresponding utf-8 byte sequence"""
+    def charcode_unicode(text: bytes) -> bytes | None:
+        """Replace unicode character codes with the corresponding utf-8 byte sequence."""
         output = regex.sub(rb"(?i)(?:\\u|%u)([a-f0-9]{4})", DeobfuScripter.codepoint_sub, text)
         return output if output != text else None
 
     @staticmethod
-    def charcode_xml(text: bytes) -> Optional[bytes]:
-        """Replace XML escape sequences with the corresponding character"""
+    def charcode_xml(text: bytes) -> bytes | None:
+        """Replace XML escape sequences with the corresponding character."""
         output = regex.sub(rb"(?i)&#x([a-z0-9]{1,6});", DeobfuScripter.codepoint_sub, text)
         output = regex.sub(rb"&#([0-9]{1,7});", partial(DeobfuScripter.codepoint_sub, base=10), output)
         return output if output != text else None
 
     @staticmethod
-    def hex_constant(text: bytes) -> Optional[bytes]:
-        """Replace hexadecimal integer constants with decimal ones"""
+    def hex_constant(text: bytes) -> bytes | None:
+        """Replace hexadecimal integer constants with decimal ones."""
         output = regex.sub(rb"(?i)\b0x([a-f0-9]{1,16})\b", lambda m: str(int(m.group(1), 16)).encode("utf-8"), text)
         return output if output != text else None
 
     @staticmethod
-    def chr_decode(text: bytes) -> Optional[bytes]:
-        """Replace calls to chr with the corresponding character"""
+    def chr_decode(text: bytes) -> bytes | None:
+        """Replace calls to chr with the corresponding character."""
         output = text
         for fullc, c in regex.findall(rb"(chr[bw]?\(([0-9]{1,3})\))", output, regex.I):
             # noinspection PyBroadException
@@ -128,8 +138,8 @@ class DeobfuScripter(ServiceBase):
         return output
 
     @staticmethod
-    def string_replace(text: bytes) -> Optional[bytes]:
-        """Replace calls to replace() with their output"""
+    def string_replace(text: bytes) -> bytes | None:
+        """Replace calls to replace() with their output."""
         if b"replace(" in text.lower():
             # Process string with replace functions calls
             # Such as "SaokzueofpigxoFile".replace(/ofpigx/g, "T").replace(/okzu/g, "v")
@@ -141,7 +151,9 @@ class DeobfuScripter(ServiceBase):
                 substitute = strreplace
                 # Extract all substitutions
                 for str1, str2 in regex.findall(
-                    rb'\.replace\([/\'"]([^,]+)[/\'\"]g?\s*,\s*[\'\"]([^)]*)[\'\"]\)', substitute, flags=regex.I
+                    rb'\.replace\([/\'"]([^,]+)[/\'\"]g?\s*,\s*[\'\"]([^)]*)[\'\"]\)',
+                    substitute,
+                    flags=regex.I,
                 ):
                     # Execute the substitution
                     substitute = substitute.replace(str1, str2)
@@ -167,8 +179,8 @@ class DeobfuScripter(ServiceBase):
         return None
 
     @staticmethod
-    def vars_of_fake_arrays(text: bytes) -> Optional[bytes]:
-        """Parse variables of fake arrays"""
+    def vars_of_fake_arrays(text: bytes) -> bytes | None:
+        """Parse variables of fake arrays."""
         replacements = regex.findall(rb"var\s+([^\s=]+)\s*=\s*\[([^\]]+)\]\[(\d+)\]", text)
         if len(replacements) > 0:
             #    ,- Make sure we do not process these again
@@ -184,8 +196,8 @@ class DeobfuScripter(ServiceBase):
                 return output
         return None
 
-    def array_of_strings(self, text: bytes) -> Optional[bytes]:
-        """Replace arrays of strings with the combined string"""
+    def array_of_strings(self, text: bytes) -> bytes | None:
+        """Replace arrays of strings with the combined string."""
         # noinspection PyBroadException
         try:
             replacements = regex.findall(rb"var\s+([^\s=]+)\s*=\s*\[([^\]]+)\]\s*;", text)
@@ -210,8 +222,8 @@ class DeobfuScripter(ServiceBase):
         return None
 
     @staticmethod
-    def powershell_vars(text: bytes) -> Optional[bytes]:
-        """Replace PowerShell variables with their values"""
+    def powershell_vars(text: bytes) -> bytes | None:
+        """Replace PowerShell variables with their values."""
         replacements_string = regex.findall(rb"(\$(?:\w+|{[^\}]+\}))\s*=[^=]\s*[\"\']([^\"\']+)[\"\']", text)
         replacements_func = regex.findall(rb"(\$(?:\w+|{[^\}]+\}))\s*=\s*([^=\"\'\s$]{3,50})[\s]", text)
         if len(replacements_string) > 0 or len(replacements_func) > 0:
@@ -227,8 +239,8 @@ class DeobfuScripter(ServiceBase):
         return None
 
     @staticmethod
-    def powershell_carets(text: bytes) -> Optional[bytes]:
-        """Remove PowerShell carets"""
+    def powershell_carets(text: bytes) -> bytes | None:
+        """Remove PowerShell carets."""
         try:
             if b"^" in text or b"`" in text:
                 output = text
@@ -245,10 +257,10 @@ class DeobfuScripter(ServiceBase):
         return None
 
     # noinspection PyBroadException
-    def msoffice_embedded_script_string(self, text: bytes) -> Optional[bytes]:
-        """Replace variables with their values in MSOffice embedded scripts"""
+    def msoffice_embedded_script_string(self, text: bytes) -> bytes | None:
+        """Replace variables with their values in MSOffice embedded scripts."""
         try:
-            scripts: Dict[bytes, List[bytes]] = {}
+            scripts: dict[bytes, list[bytes]] = {}
             output = text
             # bad, prevent false var replacements like YG="86"
             # Replace regular variables
@@ -275,8 +287,8 @@ class DeobfuScripter(ServiceBase):
             self.log.warning(f"Technique msoffice_embedded_script_string failed with error: {str(e)}")
             return None
 
-    def mswordmacro_vars(self, text: bytes) -> Optional[bytes]:
-        """Replaces Microsoft Word variables with their values"""
+    def mswordmacro_vars(self, text: bytes) -> bytes | None:
+        """Replaces Microsoft Word variables with their values."""
         # noinspection PyBroadException
         try:
             output = text
@@ -359,11 +371,11 @@ class DeobfuScripter(ServiceBase):
             self.log.warning(f"Technique mswordmacro_vars failed with error: {str(e)}")
             return None
 
-    def simple_xor_function(self, text: bytes) -> Optional[bytes]:
-        """Tries XORing the text with potential keys found in the text"""
+    def simple_xor_function(self, text: bytes) -> bytes | None:
+        """Tries XORing the text with potential keys found in the text."""
         xorstrings = regex.findall(rb'(\w+\("((?:[0-9A-Fa-f][0-9A-Fa-f])+)"\s*,\s*"([^"]+)"\))', text)
-        option_a: List[Tuple[bytes, bytes, bytes, Optional[bytes]]] = []
-        option_b: List[Tuple[bytes, bytes, bytes, Optional[bytes]]] = []
+        option_a: list[tuple[bytes, bytes, bytes, bytes | None]] = []
+        option_b: list[tuple[bytes, bytes, bytes, bytes | None]] = []
         output = text
         for f, x, k in xorstrings:
             res = self.xor_with_key(binascii.a2b_hex(x), k)
@@ -396,24 +408,24 @@ class DeobfuScripter(ServiceBase):
 
     @staticmethod
     def xor_with_key(s: bytes, k: bytes) -> bytes:
-        """XOR s using the key k"""
+        """XOR s using the key k."""
         return bytes([a ^ b for a, b in zip(s, (len(s) // len(k) + 1) * k)])
 
     @staticmethod
     def zp_xor_with_key(s: bytes, k: bytes) -> bytes:
-        """XOR variant where xoring is skipped for 0 bytes and when the byte is equal to the keybyte"""
+        """XOR variant where xoring is skipped for 0 bytes and when the byte is equal to the keybyte."""
         return bytes([a if a in (0, b) else a ^ b for a, b in zip(s, (len(s) // len(k) + 1) * k)])
 
     @staticmethod
     def clean_up_final_layer(text: bytes) -> bytes:
-        """Remove deobfuscripter artifacts from final layer for display"""
+        """Remove deobfuscripter artifacts from final layer for display."""
         output = regex.sub(rb"\r", b"", text)
         output = regex.sub(rb"<deobsfuscripter:[^>]+>\n?", b"", output)
         return output
 
     # noinspection PyBroadException
-    def extract_htmlscript(self, text: bytes) -> List[bytes]:
-        """Extract scripts from html"""
+    def extract_htmlscript(self, text: bytes) -> list[bytes]:
+        """Extract scripts from html."""
         objects = []
         try:
             html = BeautifulSoup(text, "lxml")
@@ -517,7 +529,7 @@ class DeobfuScripter(ServiceBase):
             passes[n_pass + 1] = final_techniques, filter_iocs(final_iocs, before_deobfuscation, seen_iocs)
 
         # Get new reversed iocs
-        rev_iocs = filter_iocs(md.ioc_tags(layer[::-1]), before_deobfuscation, seen_iocs)
+        rev_iocs = filter_iocs(md.ioc_tags(layer[::-1]), before_deobfuscation, seen_iocs, reversed=True)
 
         # --- Compiling results -----------------------------------------------------------------------------------
         if request.get_param("extract_original_iocs"):
@@ -594,7 +606,8 @@ class DeobfuScripter(ServiceBase):
             for ioc_type in rev_iocs:
                 for ioc in rev_iocs[ioc_type]:
                     heuristic = max(
-                        7 if "network" in ioc_type and ioc_type != "network.static.domain" else 6, heuristic
+                        7 if "network" in ioc_type and ioc_type != "network.static.domain" else 6,
+                        heuristic,
                     )
                     new_ioc_res.add_line(f"Found {ioc_type.upper().replace('.', ' ')}: {safe_str(ioc)}")
                     new_ioc_res.add_tag(ioc_type, ioc)
@@ -626,7 +639,11 @@ class DeobfuScripter(ServiceBase):
 
     @staticmethod
     def _deobfuscripter_pass(
-        layer: bytes, techniques: TechniqueList, md: DecoderWrapper, final: object = False
+        layer: bytes,
+        techniques: TechniqueList,
+        md: DecoderWrapper,
+        *,
+        final: object = False,
     ) -> tuple[bytes, list[str], dict[str, set[bytes]]]:
         techniques_used = []
         for name, technique in techniques:
@@ -636,12 +653,9 @@ class DeobfuScripter(ServiceBase):
                 # Looks like it worked, continue with the new layer
                 layer = result
         # Use multidecoder techniques and ioc tagging
-        if final:
-            tree = md.multidecoder.scan(layer)
-        else:
-            tree = md.multidecoder.scan(layer, depth=1)
+        tree = md.multidecoder.scan(layer) if final else md.multidecoder.scan(layer, depth=1)
         md.extract_files(tree, 500)
-        obfuscations = set(node.obfuscation for node in tree)
+        obfuscations = {node.obfuscation for node in tree}
         obfuscations.discard(b"")
         techniques_used.extend(obfuscations)
         iocs = get_tree_tags(tree)  # Get IoCs for the pass
