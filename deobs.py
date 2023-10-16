@@ -290,7 +290,7 @@ class DeobfuScripter(ServiceBase):
             return None
 
     def mswordmacro_vars(self, text: bytes) -> bytes | None:
-        """Replaces Microsoft Word variables with their values."""
+        """Replace Microsoft Word variables with their values."""
         # noinspection PyBroadException
         try:
             output = text
@@ -371,7 +371,7 @@ class DeobfuScripter(ServiceBase):
             return None
 
     def simple_xor_function(self, text: bytes) -> bytes | None:
-        """Tries XORing the text with potential keys found in the text."""
+        """Try XORing the text with potential keys found in the text."""
         xorstrings = regex.findall(rb'(\w+\("((?:[0-9A-Fa-f][0-9A-Fa-f])+)"\s*,\s*"([^"]+)"\))', text)
         option_a: list[tuple[bytes, bytes, bytes, bytes | None]] = []
         option_b: list[tuple[bytes, bytes, bytes, bytes | None]] = []
