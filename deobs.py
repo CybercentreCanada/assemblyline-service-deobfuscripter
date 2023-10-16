@@ -89,7 +89,7 @@ class DeobfuScripter(ServiceBase):
     @staticmethod
     def charcode(text: bytes) -> bytes | None:
         """Replace character codes with the corresponding characters."""
-        # Todo: something to handle powershell bytes syntax
+        # TODO: something to handle powershell bytes syntax
 
     @staticmethod
     def charcode_hex(text: bytes) -> bytes | None:
@@ -97,7 +97,7 @@ class DeobfuScripter(ServiceBase):
         output = regex.sub(rb"(?i)(?:\\x|%)([a-f0-9]{2})", lambda m: binascii.unhexlify(m.group(1)), text)
         return output if output != text else None
 
-    # Todo: find a way to prevent charcode_oct from mangling windows filepaths with sections that start with 0-7
+    # TODO: find a way to prevent charcode_oct from mangling windows filepaths with sections that start with 0-7
     @staticmethod
     def charcode_oct(text: bytes) -> bytes | None:
         """Replace octal character codes with the corresponding characters."""
@@ -130,7 +130,7 @@ class DeobfuScripter(ServiceBase):
         for fullc, c in regex.findall(rb"(chr[bw]?\(([0-9]{1,3})\))", output, regex.I):
             # noinspection PyBroadException
             try:
-                output = regex.sub(regex.escape(fullc), f'"{chr(int(c))}"'.encode("utf-8"), output)
+                output = regex.sub(regex.escape(fullc), f'"{chr(int(c))}"'.encode(), output)
             except Exception:
                 continue
         if output == text:
@@ -168,7 +168,7 @@ class DeobfuScripter(ServiceBase):
                 output = output.replace(str1, str2)
             # Process VB string replace
             replacements = regex.findall(
-                rb'Replace\(\s*["\']?([^,"\']*)["\']?\s*,\s*["\']?' rb'([^,"\']*)["\']?\s*,\s*["\']?([^,"\']*)["\']?',
+                rb'Replace\(\s*["\']?([^,"\']*)["\']?\s*,\s*["\']?([^,"\']*)["\']?\s*,\s*["\']?([^,"\']*)["\']?',
                 output,
             )
             for str1, str2, str3 in replacements:
@@ -189,7 +189,6 @@ class DeobfuScripter(ServiceBase):
                 try:
                     value = regex.split(rb"\s*,\s*", array)[int(pos)]
                 except IndexError:
-                    # print '[' + array + '][' + pos + ']'
                     break
                 output = output.replace(varname, value)
             if output != text:
@@ -209,15 +208,16 @@ class DeobfuScripter(ServiceBase):
                     for i in occurences:
                         try:
                             output = regex.sub(
-                                varname + rb"\s*\[(%d)\]" % i, values.split(b",")[i].replace(b"\\", b"\\\\"), output
+                                varname + rb"\s*\[(%d)\]" % i,
+                                values.split(b",")[i].replace(b"\\", b"\\\\"),
+                                output,
                             )
                         except IndexError:
-                            # print '[' + array + '][' + pos + ']'
                             break
                 if output != text:
                     return output
         except Exception as e:
-            self.log.warning(f"Technique array_of_strings failed with error: {str(e)}")
+            self.log.warning(f"Technique array_of_strings failed with error: {e!s}")
 
         return None
 
@@ -265,7 +265,9 @@ class DeobfuScripter(ServiceBase):
             # bad, prevent false var replacements like YG="86"
             # Replace regular variables
             replacements = regex.findall(
-                rb'^(\s*(\w+)\s*=\s*\w*\s*\+?\s(["\'])(.+)["\']\s*\+\s*vbCrLf\s*$)', output, regex.M
+                rb'^(\s*(\w+)\s*=\s*\w*\s*\+?\s(["\'])(.+)["\']\s*\+\s*vbCrLf\s*$)',
+                output,
+                regex.M,
             )
             if len(replacements) > 0:
                 for full, variable_name, delim, value in replacements:
@@ -284,7 +286,7 @@ class DeobfuScripter(ServiceBase):
             return output
 
         except Exception as e:
-            self.log.warning(f"Technique msoffice_embedded_script_string failed with error: {str(e)}")
+            self.log.warning(f"Technique msoffice_embedded_script_string failed with error: {e!s}")
             return None
 
     def mswordmacro_vars(self, text: bytes) -> bytes | None:
@@ -338,9 +340,6 @@ class DeobfuScripter(ServiceBase):
                             output,
                             count=5,
                         )
-                        # output = regex.sub(rb'(.*[^\s].*)\b' + varname + rb'\b',
-                        #                 b'\\1"' + final_val.replace(b"\\", b"\\\\") + b'"',
-                        #                 output)
 
             # Remaining stacked strings
             replacements = regex.findall(
@@ -368,7 +367,7 @@ class DeobfuScripter(ServiceBase):
             return output
 
         except Exception as e:
-            self.log.warning(f"Technique mswordmacro_vars failed with error: {str(e)}")
+            self.log.warning(f"Technique mswordmacro_vars failed with error: {e!s}")
             return None
 
     def simple_xor_function(self, text: bytes) -> bytes | None:
@@ -381,24 +380,22 @@ class DeobfuScripter(ServiceBase):
             res = self.xor_with_key(binascii.a2b_hex(x), k)
             if self.printable_ratio(res) == 1:
                 option_a.append((f, x, k, res))
-                # print 'A:',f,x,k, res
             else:
                 option_a.append((f, x, k, None))
             # try by shifting the key by 1
             res = self.xor_with_key(binascii.a2b_hex(x), k[1:] + k[0:1])
             if self.printable_ratio(res) == 1:
                 option_b.append((f, x, k, res))
-                # print 'B:',f,x,k, res
             else:
                 option_b.append((f, x, k, None))
 
         xorstrings = []
-        if None not in map(lambda y: y[3], option_a):
+        if None not in (y[3] for y in option_a):
             xorstrings = option_a
-        elif None not in map(lambda z: z[3], option_b):
+        elif None not in (z[3] for z in option_b):
             xorstrings = option_b
 
-        for f, x, k, r in xorstrings:
+        for f, _, _, r in xorstrings:
             if r is not None:
                 output = output.replace(f, b'"' + r + b'"')
 
@@ -420,8 +417,7 @@ class DeobfuScripter(ServiceBase):
     def clean_up_final_layer(text: bytes) -> bytes:
         """Remove deobfuscripter artifacts from final layer for display."""
         output = regex.sub(rb"\r", b"", text)
-        output = regex.sub(rb"<deobsfuscripter:[^>]+>\n?", b"", output)
-        return output
+        return regex.sub(rb"<deobsfuscripter:[^>]+>\n?", b"", output)
 
     # noinspection PyBroadException
     def extract_htmlscript(self, text: bytes) -> list[bytes]:
@@ -433,7 +429,7 @@ class DeobfuScripter(ServiceBase):
                 for s in html.find_all(tag_type):
                     objects.append(str(s).encode("utf-8"))
         except Exception as e:
-            self.log.warning(f"Failure in extract_htmlscript function: {str(e)}")
+            self.log.warning(f"Failure in extract_htmlscript function: {e!s}")
             objects = []
         return objects
 
@@ -458,7 +454,6 @@ class DeobfuScripter(ServiceBase):
             ("MSWord macro vars", self.mswordmacro_vars),
             ("Powershell vars", self.powershell_vars),
             ("Hex Charcodes", self.charcode_hex),
-            # ('Octal Charcodes', self.charcode_oct),
             ("Unicode Charcodes", self.charcode_unicode),
             ("XML Charcodes", self.charcode_xml),
             ("Hex Int Constants", self.hex_constant),
@@ -555,7 +550,9 @@ class DeobfuScripter(ServiceBase):
         # Display obfuscation steps
         heuristic = Heuristic(1)
         mres = ResultSection(
-            "De-obfuscation steps taken by DeobsfuScripter", parent=request.result, heuristic=heuristic
+            "De-obfuscation steps taken by DeobsfuScripter",
+            parent=request.result,
+            heuristic=heuristic,
         )
 
         tech_count: Counter[str] = Counter()
