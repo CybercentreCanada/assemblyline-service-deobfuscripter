@@ -13,10 +13,11 @@ from typing import Callable, Dict, List, Optional, Set, Tuple
 import magic
 import regex
 from assemblyline.common.str_utils import safe_str
+from assemblyline.odm.models.result import BODY_FORMAT
 from assemblyline_service_utilities.common.balbuzard.patterns import PatternMatch
 from assemblyline_v4_service.common.base import ServiceBase
 from assemblyline_v4_service.common.request import MaxExtractedExceeded, ServiceRequest
-from assemblyline_v4_service.common.result import BODY_FORMAT, Heuristic, Result, ResultSection
+from assemblyline_v4_service.common.result import Heuristic, Result, ResultSection
 from bs4 import BeautifulSoup
 
 
