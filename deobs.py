@@ -1,55 +1,77 @@
-""" DeobfuScripter: Script Deobfuscation Service """
+"""DeobfuScripter: Script Deobfuscation Service."""
 
 from __future__ import annotations
 
 import binascii
-import hashlib
 import os
-from collections import Counter
+from collections import Counter, defaultdict
 from functools import partial
-from itertools import chain
-from typing import Callable, Dict, List, Optional, Set, Tuple
+from typing import Callable, Optional
 
-import magic
 import regex
 from assemblyline.common.str_utils import safe_str
-from assemblyline_service_utilities.common.balbuzard.patterns import PatternMatch
+from assemblyline_service_utilities.common.extractor.decode_wrapper import DecoderWrapper, get_tree_tags
 from assemblyline_v4_service.common.base import ServiceBase
 from assemblyline_v4_service.common.request import MaxExtractedExceeded, ServiceRequest
 from assemblyline_v4_service.common.result import BODY_FORMAT, Heuristic, Result, ResultSection
 from bs4 import BeautifulSoup
 
+# Type declarations
+TechniqueList = list[tuple[str, Callable[[bytes], Optional[bytes]]]]
+
+
+def filter_iocs(
+    iocs: dict[str, set[bytes]],
+    original: bytes,
+    seen: set[bytes],
+    *,
+    reversed: object = False,
+) -> dict[str, set[bytes]]:
+    """Filter IOCs against the original text and those already found.
+
+    IOCs are filtered if they are found in original or are in seen.
+    network.static.uri tags are filtered based on segments before the path only.
+    """
+    new_iocs: defaultdict[str, set[bytes]] = defaultdict(set)
+    for ioc_type in iocs:
+        for ioc in iocs[ioc_type]:
+            prefix = b"/".join(ioc.split(b"/", 3)[:3]) if ioc_type == "network.static.uri" else ioc
+            if reversed:
+                prefix = prefix[::-1]
+            if prefix not in seen and prefix not in original:
+                seen.add(prefix)
+                new_iocs[ioc_type].add(ioc)
+    return new_iocs
+
 
 class DeobfuScripter(ServiceBase):
-    """Service for deobfuscating scripts"""
+    """Service for deobfuscating scripts."""
 
-    FILETYPES = ["application", "document", "exec", "image", "Microsoft", "text"]
     VALIDCHARS = b" 0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
-    BINCHARS = bytes(list(set(range(0, 256)) - set(VALIDCHARS)))
+    BINCHARS = bytes(list(set(range(256)) - set(VALIDCHARS)))
 
-    def __init__(self, config: Optional[Dict] = None) -> None:
+    def __init__(self, config: dict | None = None) -> None:
         super().__init__(config)
-        self.hashes: Set[str] = set()
-        self.files_extracted: Set[str] = set()
 
     # --- Support Modules ----------------------------------------------------------------------------------------------
 
     def printable_ratio(self, text: bytes) -> float:
-        """Calcuate the ratio of printable characters to total characters in text"""
+        """Calcuate the ratio of printable characters to total characters in text."""
         return float(float(len(text.translate(None, self.BINCHARS))) / float(len(text)))
 
     @staticmethod
     def encode_codepoint(codepoint: int) -> bytes:
-        """Returns the utf-8 encoding of a unicode codepoint"""
+        """Get the encoding from unicode codepoint."""
         return chr(codepoint).encode("utf-8")
 
     @staticmethod
-    def codepoint_sub(match: regex.Match, base: int = 16) -> bytes:
+    def codepoint_sub(match: regex.Match[bytes], base: int = 16) -> bytes:
         """Replace method for unicode codepoint regex substitutions.
 
         Args:
             match: The regex match object with the text of the unicode codepoint value as group 1.
             base: The base that the unicode codepoint is represented in (defaults to hexadecimal)
+
         Returns:
             - The utf-8 byte sequence for the codepoint if it can be decoded.
             - The original match text if there is a decoding error.
@@ -61,166 +83,49 @@ class DeobfuScripter(ServiceBase):
 
     @staticmethod
     def add1b(s: bytes, k: int) -> bytes:
-        """Add k to each byte of s"""
+        """Add k to each byte of s."""
         return bytes([(c + k) & 0xFF for c in s])
 
     @staticmethod
-    def charcode(text: bytes) -> Optional[bytes]:
-        """Replace character codes with the corresponding characters"""
-        # Todo: something to handle powershell bytes syntax
+    def charcode(text: bytes) -> bytes | None:
+        """Replace character codes with the corresponding characters."""
+        # TODO: something to handle powershell bytes syntax
 
     @staticmethod
-    def charcode_hex(text: bytes) -> Optional[bytes]:
-        """Replace hex character codes with the corresponding characters"""
+    def charcode_hex(text: bytes) -> bytes | None:
+        """Replace hex character codes with the corresponding characters."""
         output = regex.sub(rb"(?i)(?:\\x|%)([a-f0-9]{2})", lambda m: binascii.unhexlify(m.group(1)), text)
         return output if output != text else None
 
-    # Todo: find a way to prevent charcode_oct from mangling windows filepaths with sections that start with 0-7
+    # TODO: find a way to prevent charcode_oct from mangling windows filepaths with sections that start with 0-7
     @staticmethod
-    def charcode_oct(text: bytes) -> Optional[bytes]:
-        """Replace octal character codes with the corresponding characters"""
+    def charcode_oct(text: bytes) -> bytes | None:
+        """Replace octal character codes with the corresponding characters."""
         output = regex.sub(rb"\\([0-7]{1,3})", partial(DeobfuScripter.codepoint_sub, base=8), text)
         return output if output != text else None
 
     @staticmethod
-    def charcode_unicode(text: bytes) -> Optional[bytes]:
-        """Replace unicode character codes with the corresponding utf-8 byte sequence"""
+    def charcode_unicode(text: bytes) -> bytes | None:
+        """Replace unicode character codes with the corresponding utf-8 byte sequence."""
         output = regex.sub(rb"(?i)(?:\\u|%u)([a-f0-9]{4})", DeobfuScripter.codepoint_sub, text)
         return output if output != text else None
 
     @staticmethod
-    def charcode_xml(text: bytes) -> Optional[bytes]:
-        """Replace XML escape sequences with the corresponding character"""
+    def charcode_xml(text: bytes) -> bytes | None:
+        """Replace XML escape sequences with the corresponding character."""
         output = regex.sub(rb"(?i)&#x([a-z0-9]{1,6});", DeobfuScripter.codepoint_sub, text)
         output = regex.sub(rb"&#([0-9]{1,7});", partial(DeobfuScripter.codepoint_sub, base=10), output)
         return output if output != text else None
 
     @staticmethod
-    def hex_constant(text: bytes) -> Optional[bytes]:
-        """Replace hexadecimal integer constants with decimal ones"""
+    def hex_constant(text: bytes) -> bytes | None:
+        """Replace hexadecimal integer constants with decimal ones."""
         output = regex.sub(rb"(?i)\b0x([a-f0-9]{1,16})\b", lambda m: str(int(m.group(1), 16)).encode("utf-8"), text)
         return output if output != text else None
 
     @staticmethod
-    def chr_decode(text: bytes) -> Optional[bytes]:
-        """Replace calls to chr with the corresponding character"""
-        output = text
-        for fullc, c in regex.findall(rb"(chr[bw]?\(([0-9]{1,3})\))", output, regex.I):
-            # noinspection PyBroadException
-            try:
-                output = regex.sub(regex.escape(fullc), f'"{chr(int(c))}"'.encode("utf-8"), output)
-            except Exception:
-                continue
-        if output == text:
-            return None
-        return output
-
-    @staticmethod
-    def string_replace(text: bytes) -> Optional[bytes]:
-        """Replace calls to replace() with their output"""
-        if b"replace(" in text.lower():
-            # Process string with replace functions calls
-            # Such as "SaokzueofpigxoFile".replace(/ofpigx/g, "T").replace(/okzu/g, "v")
-            output = text
-            # Find all occurrences of string replace (JS)
-            for strreplace in [
-                o[0] for o in regex.findall(rb'(["\'][^"\']+["\']((\.replace\([^)]+\))+))', output, flags=regex.I)
-            ]:
-                substitute = strreplace
-                # Extract all substitutions
-                for str1, str2 in regex.findall(
-                    rb'\.replace\([/\'"]([^,]+)[/\'\"]g?\s*,\s*[\'\"]([^)]*)[\'\"]\)', substitute, flags=regex.I
-                ):
-                    # Execute the substitution
-                    substitute = substitute.replace(str1, str2)
-                # Remove the replace calls from the layer (prevent accidental substitutions in the next step)
-                if b".replace(" in substitute.lower():
-                    substitute = substitute[: substitute.lower().index(b".replace(")]
-                output = output.replace(strreplace, substitute)
-
-            # Process global string replace
-            replacements = regex.findall(rb'replace\(\s*/([^)]+)/g?, [\'"]([^\'"]*)[\'"]', output)
-            for str1, str2 in replacements:
-                output = output.replace(str1, str2)
-            # Process VB string replace
-            replacements = regex.findall(
-                rb'Replace\(\s*["\']?([^,"\']*)["\']?\s*,\s*["\']?' rb'([^,"\']*)["\']?\s*,\s*["\']?([^,"\']*)["\']?',
-                output,
-            )
-            for str1, str2, str3 in replacements:
-                output = output.replace(str1, str1.replace(str2, str3))
-            output = regex.sub(rb'\.replace\(\s*/([^)]+)/g?, [\'"]([^\'"]*)[\'"]\)', b"", output)
-            if output != text:
-                return output
-        return None
-
-    def b64decode_str(self, text: bytes) -> Optional[bytes]:
-        """Decode base64"""
-        output = text
-
-        head: bytes
-        bmatch: bytes
-        tail: bytes
-        for head, bmatch, tail in regex.findall(rb"((?:atob\()+)\'([A-Za-z0-9+/]+={0,2})\'(\)+)", text):
-            iters = min(len(head) // 5, len(tail))
-            d = bmatch
-            for _ in range(iters):
-                try:
-                    d = binascii.a2b_base64(d)
-                except binascii.Error:
-                    break
-            output = output.replace(b"atob(" * iters + b"'" + bmatch + b"'" + b")" * iters, b"'" + d + b"'")
-
-        b64str: list[bytes] = regex.findall(b"((?:[A-Za-z0-9+/]{3,}={0,2}(?:&#[x1][A0];)?[\r]?[\n]?){6,})", text)
-        for bmatch in b64str:
-            if bmatch not in output:
-                continue  # was already processed by atob
-            s = (
-                bmatch.replace(b"\n", b"")
-                .replace(b"\r", b"")
-                .replace(b" ", b"")
-                .replace(b"&#xA;", b"")
-                .replace(b"&#10;", b"")
-            )
-            uniq_char = set(s)
-            if len(uniq_char) <= 6 or len(s) < 16 or len(s) % 4:
-                continue
-            try:
-                d = binascii.a2b_base64(s)
-            except binascii.Error:
-                continue
-            sha256hash = hashlib.sha256(d).hexdigest()
-            if sha256hash not in self.hashes:
-                if len(d) > 500:
-                    m = magic.Magic(mime=True)
-                    mag = magic.Magic()
-                    ftype = m.from_buffer(d)
-                    mag_ftype = mag.from_buffer(d)
-                    for file_type in self.FILETYPES:
-                        if (file_type in ftype and "octet-stream" not in ftype) or file_type in mag_ftype:
-                            b64_file_name = f"{sha256hash[0:10]}_b64_decoded"
-                            b64_file_path = os.path.join(self.working_directory, b64_file_name)
-                            with open(b64_file_path, "wb") as b64_file:
-                                b64_file.write(d)
-                            self.files_extracted.add(b64_file_path)
-                            self.hashes.add(sha256hash)
-                            break
-
-                if len(set(d)) > 6 and all(8 < c < 127 for c in d) and len(regex.sub(rb"\s", b"", d)) > 14:
-                    output = output.replace(bmatch, d)
-                else:
-                    # Test for ASCII seperated by \x00
-                    p = d.replace(b"\x00", b"")
-                    if len(set(p)) > 6 and all(8 < c < 127 for c in p) and len(regex.sub(rb"\s", b"", p)) > 14:
-                        output = output.replace(bmatch, p)
-
-        if output == text:
-            return None
-        return output
-
-    @staticmethod
-    def vars_of_fake_arrays(text: bytes) -> Optional[bytes]:
-        """Parse variables of fake arrays"""
+    def vars_of_fake_arrays(text: bytes) -> bytes | None:
+        """Parse variables of fake arrays."""
         replacements = regex.findall(rb"var\s+([^\s=]+)\s*=\s*\[([^\]]+)\]\[(\d+)\]", text)
         if len(replacements) > 0:
             #    ,- Make sure we do not process these again
@@ -229,15 +134,14 @@ class DeobfuScripter(ServiceBase):
                 try:
                     value = regex.split(rb"\s*,\s*", array)[int(pos)]
                 except IndexError:
-                    # print '[' + array + '][' + pos + ']'
                     break
                 output = output.replace(varname, value)
             if output != text:
                 return output
         return None
 
-    def array_of_strings(self, text: bytes) -> Optional[bytes]:
-        """Replace arrays of strings with the combined string"""
+    def array_of_strings(self, text: bytes) -> bytes | None:
+        """Replace arrays of strings with the combined string."""
         # noinspection PyBroadException
         try:
             replacements = regex.findall(rb"var\s+([^\s=]+)\s*=\s*\[([^\]]+)\]\s*;", text)
@@ -249,43 +153,22 @@ class DeobfuScripter(ServiceBase):
                     for i in occurences:
                         try:
                             output = regex.sub(
-                                varname + rb"\s*\[(%d)\]" % i, values.split(b",")[i].replace(b"\\", b"\\\\"), output
+                                varname + rb"\s*\[(%d)\]" % i,
+                                values.split(b",")[i].replace(b"\\", b"\\\\"),
+                                output,
                             )
                         except IndexError:
-                            # print '[' + array + '][' + pos + ']'
                             break
                 if output != text:
                     return output
         except Exception as e:
-            self.log.warning(f"Technique array_of_strings failed with error: {str(e)}")
+            self.log.warning(f"Technique array_of_strings failed with error: {e!s}")
 
         return None
 
     @staticmethod
-    def concat_strings(text: bytes) -> Optional[bytes]:
-        """Concatenate disconnected strings"""
-        # Line continuation character in VB -- '_'
-        output = regex.sub(rb'[\'"][\s\n_]*?[+&][\s\n_]*[\'"]', b"", text)
-        if output != text:
-            return output
-        return None
-
-    @staticmethod
-    def str_reverse(text: bytes) -> Optional[bytes]:
-        """Replace StrReverse function calls with the reverse of its argument"""
-        output = text
-        # VBA format StrReverse("[text]")
-        replacements = regex.findall(rb'(StrReverse\("(.+?(?="\))))', output)
-        for full, string in replacements:
-            reversed_string = full.replace(string, string[::-1]).replace(b"StrReverse(", b"")[:-1]
-            output = output.replace(full, reversed_string)
-        if output != text:
-            return output
-        return None
-
-    @staticmethod
-    def powershell_vars(text: bytes) -> Optional[bytes]:
-        """Replace PowerShell variables with their values"""
+    def powershell_vars(text: bytes) -> bytes | None:
+        """Replace PowerShell variables with their values."""
         replacements_string = regex.findall(rb"(\$(?:\w+|{[^\}]+\}))\s*=[^=]\s*[\"\']([^\"\']+)[\"\']", text)
         replacements_func = regex.findall(rb"(\$(?:\w+|{[^\}]+\}))\s*=\s*([^=\"\'\s$]{3,50})[\s]", text)
         if len(replacements_string) > 0 or len(replacements_func) > 0:
@@ -301,8 +184,8 @@ class DeobfuScripter(ServiceBase):
         return None
 
     @staticmethod
-    def powershell_carets(text: bytes) -> Optional[bytes]:
-        """Remove PowerShell carets"""
+    def powershell_carets(text: bytes) -> bytes | None:
+        """Remove PowerShell carets."""
         try:
             if b"^" in text or b"`" in text:
                 output = text
@@ -319,15 +202,17 @@ class DeobfuScripter(ServiceBase):
         return None
 
     # noinspection PyBroadException
-    def msoffice_embedded_script_string(self, text: bytes) -> Optional[bytes]:
-        """Replace variables with their values in MSOffice embedded scripts"""
+    def msoffice_embedded_script_string(self, text: bytes) -> bytes | None:
+        """Replace variables with their values in MSOffice embedded scripts."""
         try:
-            scripts: Dict[bytes, List[bytes]] = {}
+            scripts: dict[bytes, list[bytes]] = {}
             output = text
             # bad, prevent false var replacements like YG="86"
             # Replace regular variables
             replacements = regex.findall(
-                rb'^(\s*(\w+)\s*=\s*\w*\s*\+?\s(["\'])(.+)["\']\s*\+\s*vbCrLf\s*$)', output, regex.M
+                rb'^(\s*(\w+)\s*=\s*\w*\s*\+?\s(["\'])(.+)["\']\s*\+\s*vbCrLf\s*$)',
+                output,
+                regex.M,
             )
             if len(replacements) > 0:
                 for full, variable_name, delim, value in replacements:
@@ -346,11 +231,11 @@ class DeobfuScripter(ServiceBase):
             return output
 
         except Exception as e:
-            self.log.warning(f"Technique msoffice_embedded_script_string failed with error: {str(e)}")
+            self.log.warning(f"Technique msoffice_embedded_script_string failed with error: {e!s}")
             return None
 
-    def mswordmacro_vars(self, text: bytes) -> Optional[bytes]:
-        """Replaces Microsoft Word variables with their values"""
+    def mswordmacro_vars(self, text: bytes) -> bytes | None:
+        """Replace Microsoft Word variables with their values."""
         # noinspection PyBroadException
         try:
             output = text
@@ -400,9 +285,6 @@ class DeobfuScripter(ServiceBase):
                             output,
                             count=5,
                         )
-                        # output = regex.sub(rb'(.*[^\s].*)\b' + varname + rb'\b',
-                        #                 b'\\1"' + final_val.replace(b"\\", b"\\\\") + b'"',
-                        #                 output)
 
             # Remaining stacked strings
             replacements = regex.findall(
@@ -430,37 +312,35 @@ class DeobfuScripter(ServiceBase):
             return output
 
         except Exception as e:
-            self.log.warning(f"Technique mswordmacro_vars failed with error: {str(e)}")
+            self.log.warning(f"Technique mswordmacro_vars failed with error: {e!s}")
             return None
 
-    def simple_xor_function(self, text: bytes) -> Optional[bytes]:
-        """Tries XORing the text with potential keys found in the text"""
+    def simple_xor_function(self, text: bytes) -> bytes | None:
+        """Try XORing the text with potential keys found in the text."""
         xorstrings = regex.findall(rb'(\w+\("((?:[0-9A-Fa-f][0-9A-Fa-f])+)"\s*,\s*"([^"]+)"\))', text)
-        option_a: List[Tuple[bytes, bytes, bytes, Optional[bytes]]] = []
-        option_b: List[Tuple[bytes, bytes, bytes, Optional[bytes]]] = []
+        option_a: list[tuple[bytes, bytes, bytes, bytes | None]] = []
+        option_b: list[tuple[bytes, bytes, bytes, bytes | None]] = []
         output = text
         for f, x, k in xorstrings:
             res = self.xor_with_key(binascii.a2b_hex(x), k)
             if self.printable_ratio(res) == 1:
                 option_a.append((f, x, k, res))
-                # print 'A:',f,x,k, res
             else:
                 option_a.append((f, x, k, None))
             # try by shifting the key by 1
             res = self.xor_with_key(binascii.a2b_hex(x), k[1:] + k[0:1])
             if self.printable_ratio(res) == 1:
                 option_b.append((f, x, k, res))
-                # print 'B:',f,x,k, res
             else:
                 option_b.append((f, x, k, None))
 
         xorstrings = []
-        if None not in map(lambda y: y[3], option_a):
+        if None not in (y[3] for y in option_a):
             xorstrings = option_a
-        elif None not in map(lambda z: z[3], option_b):
+        elif None not in (z[3] for z in option_b):
             xorstrings = option_b
 
-        for f, x, k, r in xorstrings:
+        for f, _, _, r in xorstrings:
             if r is not None:
                 output = output.replace(f, b'"' + r + b'"')
 
@@ -470,24 +350,23 @@ class DeobfuScripter(ServiceBase):
 
     @staticmethod
     def xor_with_key(s: bytes, k: bytes) -> bytes:
-        """XOR s using the key k"""
+        """XOR s using the key k."""
         return bytes([a ^ b for a, b in zip(s, (len(s) // len(k) + 1) * k)])
 
     @staticmethod
     def zp_xor_with_key(s: bytes, k: bytes) -> bytes:
-        """XOR variant where xoring is skipped for 0 bytes and when the byte is equal to the keybyte"""
+        """XOR variant where xoring is skipped for 0 bytes and when the byte is equal to the keybyte."""
         return bytes([a if a in (0, b) else a ^ b for a, b in zip(s, (len(s) // len(k) + 1) * k)])
 
     @staticmethod
     def clean_up_final_layer(text: bytes) -> bytes:
-        """Remove deobfuscripter artifacts from final layer for display"""
+        """Remove deobfuscripter artifacts from final layer for display."""
         output = regex.sub(rb"\r", b"", text)
-        output = regex.sub(rb"<deobsfuscripter:[^>]+>\n?", b"", output)
-        return output
+        return regex.sub(rb"<deobsfuscripter:[^>]+>\n?", b"", output)
 
     # noinspection PyBroadException
-    def extract_htmlscript(self, text: bytes) -> List[bytes]:
-        """Extract scripts from html"""
+    def extract_htmlscript(self, text: bytes) -> list[bytes]:
+        """Extract scripts from html."""
         objects = []
         try:
             html = BeautifulSoup(text, "lxml")
@@ -495,7 +374,7 @@ class DeobfuScripter(ServiceBase):
                 for s in html.find_all(tag_type):
                     objects.append(str(s).encode("utf-8"))
         except Exception as e:
-            self.log.warning(f"Failure in extract_htmlscript function: {str(e)}")
+            self.log.warning(f"Failure in extract_htmlscript function: {e!s}")
             objects = []
         return objects
 
@@ -504,28 +383,19 @@ class DeobfuScripter(ServiceBase):
     def execute(self, request: ServiceRequest) -> None:
         # --- Setup ----------------------------------------------------------------------------------------------
         request.result = Result()
-        patterns = PatternMatch()
+        md = DecoderWrapper(self.working_directory)
 
         max_attempts = 100 if request.deep_scan else 10
 
-        self.files_extracted = set()
-        self.hashes = set()
-
         # --- Prepare Techniques ----------------------------------------------------------------------------------
-        TechniqueList = List[Tuple[str, Callable[[bytes], Optional[bytes]]]]
         first_pass: TechniqueList = [
             ("MSOffice Embedded script", self.msoffice_embedded_script_string),
-            ("CHR and CHRB decode", self.chr_decode),
-            ("String replace", self.string_replace),
             ("Powershell carets", self.powershell_carets),
             ("Array of strings", self.array_of_strings),
             ("Fake array vars", self.vars_of_fake_arrays),
-            ("Reverse strings", self.str_reverse),
-            ("B64 Decode", self.b64decode_str),
             ("Simple XOR function", self.simple_xor_function),
         ]
         second_pass: TechniqueList = [
-            ("Concat strings", self.concat_strings),
             ("MSWord macro vars", self.mswordmacro_vars),
             ("Powershell vars", self.powershell_vars),
             ("Hex Charcodes", self.charcode_hex),
@@ -536,13 +406,22 @@ class DeobfuScripter(ServiceBase):
         ]
         second_pass.extend(first_pass)
         final_pass: TechniqueList = []
+        final_pass.extend(second_pass)
 
         code_extracts = [(".*html.*", "HTML scripts extraction", self.extract_htmlscript)]
 
-        layers_list: list[str] = []
         layer = request.file_contents
 
         # --- Stage 1: Script Extraction --------------------------------------------------------------------------
+        extract_res = ResultSection("Extraction")
+        for pattern, name, func in code_extracts:
+            if regex.match(regex.compile(pattern), request.task.file_type):
+                extracted_parts = func(request.file_contents)
+                layer = b"\n".join(extracted_parts).strip()
+                extract_res.add_line(name)
+                break
+        if len(layer.strip()) < 3:
+            return  # No script present in file
         if request.file_type == "code/ps1":
             sig = regex.search(
                 rb"# SIG # Begin signature block\r\n(?:# [A-Za-z0-9+/=]+\r\n)+# SIG # End signature block",
@@ -560,49 +439,42 @@ class DeobfuScripter(ServiceBase):
                     with open(sig_path, "wb+") as f:
                         f.write(signature)
                     request.add_extracted(sig_path, sig_filename, "Powershell Signature")
+                    extract_res.add_line(f"Powershell Signature Comment, see {sig_filename}")
                 except binascii.Error:
                     pass
-        for pattern, name, func in code_extracts:
-            if regex.match(regex.compile(pattern), request.task.file_type):
-                extracted_parts = func(request.file_contents)
-                layer = b"\n".join(extracted_parts).strip()
-                layers_list.append(name)
-                break
-        if len(layer.strip()) < 3:
-            # Exit immediately if no script is found
-            return
+        if extract_res.body:
+            request.result.add_section(extract_res)
         # Save extracted scripts before deobfuscation
         before_deobfuscation = layer
 
         # --- Stage 2: Deobsfucation ------------------------------------------------------------------------------
+        seen_iocs: set[bytes] = set()
+        passes: dict[int, tuple[list[str], dict[str, set[bytes]]]] = {}
         techniques = first_pass
-        layers_count = len(layers_list)
-        for _ in range(max_attempts):
-            for name, technique in techniques:
-                result = technique(layer)
-                if result:
-                    layers_list.append(name)
-                    # Looks like it worked, restart with new layer
-                    layer = result
-            # If there are no new layers in a pass, start second pass or break
-            if layers_count == len(layers_list):
+        n_pass = 0  # Ensure n_pass is bound outside of the loop
+        for n_pass in range(max_attempts):
+            layer, techiques_used, iocs = self._deobfuscripter_pass(layer, techniques, md)
+            if techiques_used:
+                # Store the techniques used and new iocs found for each pass
+                passes[n_pass] = techiques_used, filter_iocs(iocs, before_deobfuscation, seen_iocs)
+            else:
+                # If there are no new layers in a pass, start second pass or break
                 if len(techniques) != len(first_pass):
                     # Already on second pass
                     break
                 techniques = second_pass
-            layers_count = len(layers_list)
 
         # --- Final Layer -----------------------------------------------------------------------------------------
-        final_pass.extend(techniques)
-        for name, technique in final_pass:
-            res = technique(layer)
-            if res:
-                layers_list.append(name)
-                layer = res
+        layer, final_techniques, final_iocs = self._deobfuscripter_pass(layer, final_pass, md, final=True)
+        if final_techniques:
+            passes[n_pass + 1] = final_techniques, filter_iocs(final_iocs, before_deobfuscation, seen_iocs)
+
+        # Get new reversed iocs
+        rev_iocs = filter_iocs(md.ioc_tags(layer[::-1]), before_deobfuscation, seen_iocs, reversed=True)
 
         # --- Compiling results -----------------------------------------------------------------------------------
         if request.get_param("extract_original_iocs"):
-            pat_values = patterns.ioc_match(before_deobfuscation, bogon_ip=True, just_network=False)
+            pat_values = get_tree_tags(md.multidecoder.scan(before_deobfuscation, 1))
             ioc_res = ResultSection(
                 "The following IOCs were found in the original file",
                 parent=request.result,
@@ -614,7 +486,7 @@ class DeobfuScripter(ServiceBase):
                         ioc_res.add_line(f"Found {k.upper().replace('.', ' ')}: {safe_str(v)}")
                         ioc_res.add_tag(k, v)
 
-        if not layers_list:
+        if not passes:
             return
         # Cleanup final layer
         clean = self.clean_up_final_layer(layer)
@@ -624,44 +496,21 @@ class DeobfuScripter(ServiceBase):
         # Display obfuscation steps
         heuristic = Heuristic(1)
         mres = ResultSection(
-            "De-obfuscation steps taken by DeobsfuScripter", parent=request.result, heuristic=heuristic
+            "De-obfuscation steps taken by DeobsfuScripter",
+            parent=request.result,
+            heuristic=heuristic,
         )
 
-        tech_count = Counter(layers_list)
+        tech_count: Counter[str] = Counter()
+        for p in passes.values():
+            tech_count.update(p[0])
         for tech, count in tech_count.items():
             heuristic.add_signature_id(tech, frequency=count)
             mres.add_line(f"{tech}, {count} time(s).")
 
-        # Check for new IOCs
-        pat_values = patterns.ioc_match(clean, bogon_ip=True, just_network=False)
-        diff_tags: Dict[str, List[bytes]] = {}
-        for ioc_type, iocs in pat_values.items():
-            for ioc in iocs:
-                if ioc_type == "network.static.uri":
-                    if b"/".join(ioc.split(b"/", 3)[:3]) not in before_deobfuscation:
-                        diff_tags.setdefault(ioc_type, [])
-                        diff_tags[ioc_type].append(ioc)
-                elif ioc not in before_deobfuscation:
-                    diff_tags.setdefault(ioc_type, [])
-                    diff_tags[ioc_type].append(ioc)
-
-        # And for new reversed IOCs
-        rev_values = patterns.ioc_match(clean[::-1], bogon_ip=True, just_network=False)
-        rev_tags: Dict[str, List[bytes]] = {}
-        reversed_file = before_deobfuscation[::-1]
-        for ioc_type, iocs in rev_values.items():
-            for ioc in iocs:
-                if ioc_type == "network.static.uri":
-                    if b"/".join(ioc.split(b"/", 3)[:3]) not in reversed_file:
-                        rev_tags.setdefault(ioc_type, [])
-                        rev_tags[ioc_type].append(ioc)
-                elif ioc not in reversed_file and ioc[::-1] not in diff_tags.get(ioc_type, []):
-                    rev_tags.setdefault(ioc_type, [])
-                    rev_tags[ioc_type].append(ioc)
-
         # Display final layer
         byte_count = 5000
-        if request.deep_scan or (len(clean) > 1000 and heuristic.score >= 500) or diff_tags or rev_tags:
+        if request.deep_scan or (len(clean) > 1000 and heuristic.score >= 500) or seen_iocs:
             # Save extracted file
             byte_count = 500
             file_name = f"{request.sha256}_decoded_final"
@@ -680,31 +529,44 @@ class DeobfuScripter(ServiceBase):
             parent=request.result,
         )
 
-        # Display new IOCs from final layer
-        if diff_tags or rev_tags:
-            ioc_new = ResultSection(
-                "New IOCs found after de-obfustcation", parent=request.result, body_format=BODY_FORMAT.MEMORY_DUMP
-            )
-            has_network_heur = False
-            for ty, val in chain(diff_tags.items(), rev_tags.items()):
-                if "network" in ty and ty != "network.static.domain":
-                    has_network_heur = True
-                for v in val:
-                    ioc_new.add_line(f"Found {ty.upper().replace('.', ' ')}: {safe_str(v)}")
-                    ioc_new.add_tag(ty, v)
+        # Report new IOCs
+        new_ioc_res = ResultSection("New IOCs found after de-obfustcation", body_format=BODY_FORMAT.MEMORY_DUMP)
+        heuristic = 0
+        for n_pass, (_, iocs) in passes.items():
+            if not iocs:
+                continue
+            new_ioc_res.add_line(f"New IOCs found in pass {n_pass}:")
+            for ioc_type in iocs:
+                for ioc in iocs[ioc_type]:
+                    if n_pass == 0:  # iocs in the first pass can be found by other services
+                        heuristic = 5
+                    elif heuristic < 7:
+                        heuristic = 7 if "network" in ioc_type and ioc_type != "network.static.domain" else 6
+                    new_ioc_res.add_line(f"Found {ioc_type.upper().replace('.', ' ')}: {safe_str(ioc)}")
+                    new_ioc_res.add_tag(ioc_type, ioc)
+        if rev_iocs:
+            new_ioc_res.add_line("New IOCs found reversed in the final layer:")
+            for ioc_type in rev_iocs:
+                for ioc in rev_iocs[ioc_type]:
+                    heuristic = max(
+                        7 if "network" in ioc_type and ioc_type != "network.static.domain" else 6,
+                        heuristic,
+                    )
+                    new_ioc_res.add_line(f"Found {ioc_type.upper().replace('.', ' ')}: {safe_str(ioc)}")
+                    new_ioc_res.add_tag(ioc_type, ioc)
+        if heuristic > 0:
+            new_ioc_res.set_heuristic(heuristic)
+        if new_ioc_res.body:
+            request.result.add_section(new_ioc_res)
 
-            if has_network_heur:
-                ioc_new.set_heuristic(7)
-            else:
-                ioc_new.set_heuristic(6)
-
-        if len(self.files_extracted) > 0:
+        # Report extracted files
+        if md.extracted_files:
             ext_file_res = ResultSection(
                 "The following files were extracted during the deobfuscation",
                 heuristic=Heuristic(8),
                 parent=request.result,
             )
-            for extracted in self.files_extracted:
+            for extracted in md.extracted_files:
                 file_name = os.path.basename(extracted)
                 try:
                     if request.add_extracted(
@@ -717,3 +579,28 @@ class DeobfuScripter(ServiceBase):
                 except MaxExtractedExceeded:
                     self.log.warning("Extraction limit exceeded while adding files of interest.")
                     break
+
+    @staticmethod
+    def _deobfuscripter_pass(
+        layer: bytes,
+        techniques: TechniqueList,
+        md: DecoderWrapper,
+        *,
+        final: object = False,
+    ) -> tuple[bytes, list[str], dict[str, set[bytes]]]:
+        techniques_used = []
+        for name, technique in techniques:
+            result = technique(layer)
+            if result:
+                techniques_used.append(name)
+                # Looks like it worked, continue with the new layer
+                layer = result
+        # Use multidecoder techniques and ioc tagging
+        tree = md.multidecoder.scan(layer) if final else md.multidecoder.scan(layer, depth=1)
+        md.extract_files(tree, 500)
+        obfuscations = {node.obfuscation for node in tree}
+        obfuscations.discard(b"")
+        techniques_used.extend(obfuscations)
+        iocs = get_tree_tags(tree)  # Get IoCs for the pass
+        layer = tree.flatten()
+        return layer, techniques_used, iocs
