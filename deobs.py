@@ -596,7 +596,7 @@ class DeobfuScripter(ServiceBase):
                 # Looks like it worked, continue with the new layer
                 layer = result
         # Use multidecoder techniques and ioc tagging
-        tree = md.multidecoder.scan(layer) if final else md.multidecoder.scan(layer, depth=1)
+        tree = md.multidecoder.scan(layer) if final else md.multidecoder.scan(layer, 1)
         md.extract_files(tree, 500)
         obfuscations = {node.obfuscation for node in tree}
         obfuscations.discard(b"")
