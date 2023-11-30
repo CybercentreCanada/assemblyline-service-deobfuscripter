@@ -15,6 +15,7 @@ from assemblyline_v4_service.common.base import ServiceBase
 from assemblyline_v4_service.common.request import MaxExtractedExceeded, ServiceRequest
 from assemblyline_v4_service.common.result import BODY_FORMAT, Heuristic, Result, ResultSection
 from bs4 import BeautifulSoup
+from multidecoder._version import version as multidecoder_version
 
 # Type declarations
 TechniqueList = list[tuple[str, Callable[[bytes], Optional[bytes]]]]
@@ -52,6 +53,10 @@ class DeobfuScripter(ServiceBase):
 
     def __init__(self, config: dict | None = None) -> None:
         super().__init__(config)
+
+    def get_tool_version(self) -> str:
+        """Returns the version of Multidecoder used by the service."""
+        return f"Multidecoder: {multidecoder_version}"
 
     # --- Support Modules ----------------------------------------------------------------------------------------------
 
