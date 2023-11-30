@@ -57,4 +57,4 @@ heuristics:
 docker_config:
   image: ${REGISTRY}cccs/assemblyline-service-deobfuscripter:$SERVICE_TAG
   cpu_cores: 1
-  ram_mb: 256
+  ram_mb: 1024
