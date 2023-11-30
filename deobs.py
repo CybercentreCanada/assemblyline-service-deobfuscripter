@@ -599,7 +599,7 @@ class DeobfuScripter(ServiceBase):
         tree = md.multidecoder.scan(layer) if final else md.multidecoder.scan(layer, 1)
         md.extract_files(tree, 500)
         obfuscations = {node.obfuscation for node in tree}
-        obfuscations.discard(b"")
+        obfuscations.discard("")
         techniques_used.extend(obfuscations)
         iocs = get_tree_tags(tree)  # Get IoCs for the pass
         layer = tree.flatten()
