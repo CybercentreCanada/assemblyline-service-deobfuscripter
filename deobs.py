@@ -449,14 +449,16 @@ class DeobfuScripter(ServiceBase):
 
         # --- Stage 2: Deobsfucation ------------------------------------------------------------------------------
         seen_iocs: set[bytes] = set()
-        passes: dict[int, tuple[list[str], dict[str, set[bytes]]]] = {}
+        pass_techniques: list[list[str]] = []
+        pass_iocs: list[dict[str, set[bytes]]] = []
         techniques = first_pass
         n_pass = 0  # Ensure n_pass is bound outside of the loop
         for n_pass in range(max_attempts):
             layer, techiques_used, iocs = self._deobfuscripter_pass(layer, techniques, md)
             if techiques_used:
                 # Store the techniques used and new iocs found for each pass
-                passes[n_pass] = techiques_used, filter_iocs(iocs, before_deobfuscation, seen_iocs)
+                pass_techniques.append(techiques_used)
+                pass_iocs.append(filter_iocs(iocs, before_deobfuscation, seen_iocs))
             else:
                 # If there are no new layers in a pass, start second pass or break
                 if len(techniques) != len(first_pass):
@@ -467,7 +469,8 @@ class DeobfuScripter(ServiceBase):
         # --- Final Layer -----------------------------------------------------------------------------------------
         layer, final_techniques, final_iocs = self._deobfuscripter_pass(layer, final_pass, md, final=True)
         if final_techniques:
-            passes[n_pass + 1] = final_techniques, filter_iocs(final_iocs, before_deobfuscation, seen_iocs)
+            pass_techniques.append(final_techniques)
+            pass_iocs.append(filter_iocs(final_iocs, before_deobfuscation, seen_iocs))
 
         # Get new reversed iocs
         rev_iocs = filter_iocs(md.ioc_tags(layer[::-1]), before_deobfuscation, seen_iocs, reversed=True)
@@ -486,7 +489,7 @@ class DeobfuScripter(ServiceBase):
                         ioc_res.add_line(f"Found {k.upper().replace('.', ' ')}: {safe_str(v)}")
                         ioc_res.add_tag(k, v)
 
-        if not passes:
+        if not pass_techniques:
             return
         # Cleanup final layer
         clean = self.clean_up_final_layer(layer)
@@ -502,8 +505,8 @@ class DeobfuScripter(ServiceBase):
         )
 
         tech_count: Counter[str] = Counter()
-        for p in passes.values():
-            tech_count.update(p[0])
+        for techniques_used in pass_techniques:
+            tech_count.update(techniques_used)
         for tech, count in tech_count.items():
             heuristic.add_signature_id(tech, frequency=count)
             mres.add_line(f"{tech}, {count} time(s).")
@@ -532,7 +535,7 @@ class DeobfuScripter(ServiceBase):
         # Report new IOCs
         new_ioc_res = ResultSection("New IOCs found after de-obfustcation", body_format=BODY_FORMAT.MEMORY_DUMP)
         heuristic = 0
-        for n_pass, (_, iocs) in passes.items():
+        for n_pass, iocs in enumerate(pass_iocs):
             if not iocs:
                 continue
             new_ioc_res.add_line(f"New IOCs found in pass {n_pass}:")
