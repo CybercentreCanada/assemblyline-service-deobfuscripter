@@ -35,7 +35,7 @@ def filter_iocs(
     """
     new_iocs: defaultdict[str, set[bytes]] = defaultdict(set)
     for ioc_type in iocs:
-        for ioc in iocs[ioc_type]:
+        for ioc in sorted(iocs[ioc_type]):
             prefix = b"/".join(ioc.split(b"/", 3)[:3]) if ioc_type == "network.static.uri" else ioc
             if reversed:
                 prefix = prefix[::-1]
