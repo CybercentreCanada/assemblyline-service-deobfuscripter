@@ -545,7 +545,7 @@ class DeobfuScripter(ServiceBase):
                 continue
             new_ioc_res.add_line(f"New IOCs found in pass {n_pass}:")
             for ioc_type in iocs:
-                for ioc in iocs[ioc_type]:
+                for ioc in sorted(iocs[ioc_type]):
                     if n_pass == 0:  # iocs in the first pass can be found by other services
                         heuristic = 5
                     elif heuristic < 7:
