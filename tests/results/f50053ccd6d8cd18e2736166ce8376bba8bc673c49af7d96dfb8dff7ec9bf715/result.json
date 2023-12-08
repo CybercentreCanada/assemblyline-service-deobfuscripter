@@ -5,7 +5,7 @@
     "sections": [
       {
         "auto_collapse": false,
-        "body": "decoded.hexadecimal, 1 time(s).\nconcatenation, 1 time(s).\nencoding.base64, 1 time(s).\nHex Charcodes, 1 time(s).",
+        "body": "Hex Charcodes, 1 time(s).\nconcatenation, 1 time(s).\ndecoded.hexadecimal, 1 time(s).\nencoding.base64, 1 time(s).",
         "body_config": {},
         "body_format": "TEXT",
         "classification": "TLP:C",
@@ -96,10 +96,10 @@
         "attack_ids": [],
         "heur_id": 1,
         "signatures": [
-          "decoded.hexadecimal",
+          "Hex Charcodes",
           "concatenation",
-          "encoding.base64",
-          "Hex Charcodes"
+          "decoded.hexadecimal",
+          "encoding.base64"
         ]
       },
       {

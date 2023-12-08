@@ -512,7 +512,7 @@ class DeobfuScripter(ServiceBase):
         tech_count: Counter[str] = Counter()
         for techniques_used in pass_techniques:
             tech_count.update(techniques_used)
-        for tech, count in tech_count.items():
+        for tech, count in sorted(tech_count.items()):
             heuristic.add_signature_id(tech, frequency=count)
             mres.add_line(f"{tech}, {count} time(s).")
 

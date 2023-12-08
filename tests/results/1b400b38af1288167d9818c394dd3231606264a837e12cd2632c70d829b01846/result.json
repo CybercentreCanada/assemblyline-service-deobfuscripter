@@ -5,7 +5,7 @@
     "sections": [
       {
         "auto_collapse": false,
-        "body": "function.chr, 1 time(s).\nreplace, 1 time(s).\nMSWord macro vars, 2 time(s).\nconcatenation, 1 time(s).",
+        "body": "MSWord macro vars, 2 time(s).\nconcatenation, 1 time(s).\nfunction.chr, 1 time(s).\nreplace, 1 time(s).",
         "body_config": {},
         "body_format": "TEXT",
         "classification": "TLP:C",
@@ -86,10 +86,10 @@
         "attack_ids": [],
         "heur_id": 1,
         "signatures": [
-          "function.chr",
-          "replace",
           "MSWord macro vars",
-          "concatenation"
+          "concatenation",
+          "function.chr",
+          "replace"
         ]
       },
       {
