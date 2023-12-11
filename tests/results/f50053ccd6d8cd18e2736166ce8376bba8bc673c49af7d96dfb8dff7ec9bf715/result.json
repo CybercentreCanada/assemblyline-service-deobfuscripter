@@ -1,0 +1,136 @@
+{
+  "extra": {
+    "drop_file": false,
+    "score": 140,
+    "sections": [
+      {
+        "auto_collapse": false,
+        "body": "Hex Charcodes, 1 time(s).\nconcatenation, 1 time(s).\ndecoded.hexadecimal, 1 time(s).\nencoding.base64, 1 time(s).",
+        "body_config": {},
+        "body_format": "TEXT",
+        "classification": "TLP:C",
+        "depth": 0,
+        "heuristic": {
+          "attack_ids": [],
+          "frequency": 1,
+          "heur_id": 1,
+          "score": 40,
+          "score_map": {},
+          "signatures": {
+            "Hex Charcodes": 1,
+            "concatenation": 1,
+            "decoded.hexadecimal": 1,
+            "encoding.base64": 1
+          }
+        },
+        "promote_to": null,
+        "tags": {},
+        "title_text": "De-obfuscation steps taken by DeobsfuScripter",
+        "zeroize_on_tag_safe": false
+      },
+      {
+        "auto_collapse": false,
+        "body": "// No custom JavaScript\n/**\n * @license\n * at.js 2.9.0 | (c) Adobe Systems Incorporated | All rights reserved\n * zepto.js | (c) 2010-2016 Thomas Fuchs | zeptojs.com/license\n*/\nwindow.adobe=window.adobe||{},window.adobe.target=function(){\"use strict\";var t=window,e=document,n=!e.documentMode||e.documentMode>=11;var r,o,i,c=e.compatMode&&\"CSS1Compat\"===e.compatMode&&n&&(r=window.navigator.userAgent,o=r.indexOf(\"MSIE \")>0,i=r.indexOf(\"Trident/\")>0,!(o||i)),s=t.targetGlobalSettings;if(!c||s&&!1===s.",
+        "body_config": {},
+        "body_format": "MEMORY_DUMP",
+        "classification": "TLP:C",
+        "depth": 0,
+        "heuristic": null,
+        "promote_to": null,
+        "tags": {},
+        "title_text": "First 500 bytes of the final layer:",
+        "zeroize_on_tag_safe": false
+      },
+      {
+        "auto_collapse": false,
+        "body": "New IOCs found in pass 0:\nFound FILE STRING API: CreateEvent\nNew IOCs found in pass 1:\nFound FILE STRING BLACKLISTED: Decode\nNew IOCs found reversed in the final layer:\nFound NETWORK STATIC DOMAIN: edoceD.eu",
+        "body_config": {},
+        "body_format": "MEMORY_DUMP",
+        "classification": "TLP:C",
+        "depth": 0,
+        "heuristic": {
+          "attack_ids": [],
+          "frequency": 1,
+          "heur_id": 6,
+          "score": 100,
+          "score_map": {},
+          "signatures": {}
+        },
+        "promote_to": null,
+        "tags": {
+          "file": {
+            "string": {
+              "api": [
+                "CreateEvent"
+              ],
+              "blacklisted": [
+                "Decode"
+              ]
+            }
+          },
+          "network": {
+            "static": {
+              "domain": [
+                "edoceD.eu"
+              ]
+            }
+          }
+        },
+        "title_text": "New IOCs found after de-obfustcation",
+        "zeroize_on_tag_safe": false
+      }
+    ]
+  },
+  "files": {
+    "extracted": [],
+    "supplementary": [
+      {
+        "name": "f50053ccd6d8cd18e2736166ce8376bba8bc673c49af7d96dfb8dff7ec9bf715_decoded_final",
+        "sha256": "472632b5d7f203fbbb21fe0fcdd00a4fb041fb46d552a131590e5d35fe1c73a0"
+      }
+    ]
+  },
+  "results": {
+    "heuristics": [
+      {
+        "attack_ids": [],
+        "heur_id": 1,
+        "signatures": [
+          "Hex Charcodes",
+          "concatenation",
+          "decoded.hexadecimal",
+          "encoding.base64"
+        ]
+      },
+      {
+        "attack_ids": [],
+        "heur_id": 6,
+        "signatures": []
+      }
+    ],
+    "tags": {
+      "file.string.api": [
+        {
+          "heur_id": 6,
+          "signatures": [],
+          "value": "CreateEvent"
+        }
+      ],
+      "file.string.blacklisted": [
+        {
+          "heur_id": 6,
+          "signatures": [],
+          "value": "Decode"
+        }
+      ],
+      "network.static.domain": [
+        {
+          "heur_id": 6,
+          "signatures": [],
+          "value": "edoceD.eu"
+        }
+      ]
+    },
+    "temp_submission_data": {}
+  }
+}
