@@ -35,7 +35,7 @@ def filter_iocs(
     """
     new_iocs: defaultdict[str, set[bytes]] = defaultdict(set)
     for ioc_type in iocs:
-        for ioc in iocs[ioc_type]:
+        for ioc in sorted(iocs[ioc_type]):
             prefix = b"/".join(ioc.split(b"/", 3)[:3]) if ioc_type == "network.static.uri" else ioc
             if reversed:
                 prefix = prefix[::-1]
@@ -512,7 +512,7 @@ class DeobfuScripter(ServiceBase):
         tech_count: Counter[str] = Counter()
         for techniques_used in pass_techniques:
             tech_count.update(techniques_used)
-        for tech, count in tech_count.items():
+        for tech, count in sorted(tech_count.items()):
             heuristic.add_signature_id(tech, frequency=count)
             mres.add_line(f"{tech}, {count} time(s).")
 
@@ -545,7 +545,7 @@ class DeobfuScripter(ServiceBase):
                 continue
             new_ioc_res.add_line(f"New IOCs found in pass {n_pass}:")
             for ioc_type in iocs:
-                for ioc in iocs[ioc_type]:
+                for ioc in sorted(iocs[ioc_type]):
                     if n_pass == 0:  # iocs in the first pass can be found by other services
                         heuristic = 5
                     elif heuristic < 7:

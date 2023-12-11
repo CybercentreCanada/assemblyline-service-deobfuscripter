@@ -1,0 +1,112 @@
+{
+  "extra": {
+    "drop_file": false,
+    "score": 140,
+    "sections": [
+      {
+        "auto_collapse": false,
+        "body": "Hex Int Constants, 1 time(s).\nPowershell vars, 1 time(s).\ncipher.xor35, 1 time(s).\nencoding.base64, 1 time(s).",
+        "body_config": {},
+        "body_format": "TEXT",
+        "classification": "TLP:C",
+        "depth": 0,
+        "heuristic": {
+          "attack_ids": [],
+          "frequency": 1,
+          "heur_id": 1,
+          "score": 40,
+          "score_map": {},
+          "signatures": {
+            "Hex Int Constants": 1,
+            "Powershell vars": 1,
+            "cipher.xor35": 1,
+            "encoding.base64": 1
+          }
+        },
+        "promote_to": null,
+        "tags": {},
+        "title_text": "De-obfuscation steps taken by DeobsfuScripter",
+        "zeroize_on_tag_safe": false
+      },
+      {
+        "auto_collapse": false,
+        "body": "Set-StrictMode -Version 2\n\nfunction func_get_proc_address {\n\tParam ($var_module, $var_procedure)\t\t\n\t\\$--var_unsafe_native_methods = ([AppDomain]::CurrentDomain.GetAssemblies() | Where-Object { $_.GlobalAssemblyCache -And $_.Location.Split('\\')[-1].Equals('System.dll') }).GetType('Microsoft.Win32.UnsafeNativeMethods')\n\t\\$--var_gpa = ([AppDomain]::CurrentDomain.GetAssemblies().GetMethod('GetProcAddress', [Type[]] @('System.Runtime.InteropServices.HandleRef', 'string'))\n\treturn $var_gpa.Invoke($nul",
+        "body_config": {},
+        "body_format": "MEMORY_DUMP",
+        "classification": "TLP:C",
+        "depth": 0,
+        "heuristic": null,
+        "promote_to": null,
+        "tags": {},
+        "title_text": "First 500 bytes of the final layer:",
+        "zeroize_on_tag_safe": false
+      },
+      {
+        "auto_collapse": false,
+        "body": "New IOCs found in pass 1:\nFound NETWORK STATIC DOMAIN: rhcsa.linux-shared-pkgs.de",
+        "body_config": {},
+        "body_format": "MEMORY_DUMP",
+        "classification": "TLP:C",
+        "depth": 0,
+        "heuristic": {
+          "attack_ids": [],
+          "frequency": 1,
+          "heur_id": 6,
+          "score": 100,
+          "score_map": {},
+          "signatures": {}
+        },
+        "promote_to": null,
+        "tags": {
+          "network": {
+            "static": {
+              "domain": [
+                "rhcsa.linux-shared-pkgs.de"
+              ]
+            }
+          }
+        },
+        "title_text": "New IOCs found after de-obfustcation",
+        "zeroize_on_tag_safe": false
+      }
+    ]
+  },
+  "files": {
+    "extracted": [],
+    "supplementary": [
+      {
+        "name": "243f59fa847bf04c64eeaa535ebfb9ab22684e9ebde1b87f61402980fddb23bd_decoded_final",
+        "sha256": "7adda59fc0ab6010ab0ec403dc85edd686b8673b309fa1d832f6a615c688db80"
+      }
+    ]
+  },
+  "results": {
+    "heuristics": [
+      {
+        "attack_ids": [],
+        "heur_id": 1,
+        "signatures": [
+          "Hex Int Constants",
+          "Powershell vars",
+          "cipher.xor35",
+          "encoding.base64"
+        ]
+      },
+      {
+        "attack_ids": [],
+        "heur_id": 6,
+        "signatures": []
+      }
+    ],
+    "tags": {
+      "network.static.domain": [
+        {
+          "heur_id": 6,
+          "signatures": [],
+          "value": "rhcsa.linux-shared-pkgs.de"
+        }
+      ]
+    },
+    "temp_submission_data": {}
+  }
+}
