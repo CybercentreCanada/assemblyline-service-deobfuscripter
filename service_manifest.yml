@@ -15,6 +15,7 @@ disable_cache: false
 enabled: true
 is_external: false
 licence_count: 0
+privilged: true
 
 submission_params:
   - default: false
@@ -57,4 +58,4 @@ heuristics:
 docker_config:
   image: ${REGISTRY}cccs/assemblyline-service-deobfuscripter:$SERVICE_TAG
   cpu_cores: 1
-  ram_mb: 1024
+  ram_mb: 2048
