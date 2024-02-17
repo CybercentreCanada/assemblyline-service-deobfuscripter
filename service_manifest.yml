@@ -22,6 +22,11 @@ submission_params:
     type: bool
     value: false
 
+  - name: max_file_size
+    type: int
+    value: 5000000
+    default: 5000000
+
 heuristics:
   - description: Obfuscation techniques were found and de-obfuscated in the file
     filetype: code/.*
