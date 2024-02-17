@@ -388,6 +388,10 @@ class DeobfuScripter(ServiceBase):
     def execute(self, request: ServiceRequest) -> None:
         # --- Setup ----------------------------------------------------------------------------------------------
         request.result = Result()
+
+        if request.task.file_size > request.get_param("max_file_size"):
+            return  # prevent memory issues
+
         md = DecoderWrapper(self.working_directory)
 
         max_attempts = 100 if request.deep_scan else 10
