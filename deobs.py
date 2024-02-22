@@ -388,6 +388,10 @@ class DeobfuScripter(ServiceBase):
     def execute(self, request: ServiceRequest) -> None:
         # --- Setup ----------------------------------------------------------------------------------------------
         request.result = Result()
+
+        if request.task.file_size > request.get_param("max_file_size"):
+            return  # prevent memory issues
+
         md = DecoderWrapper(self.working_directory)
 
         max_attempts = 100 if request.deep_scan else 10
@@ -454,7 +458,7 @@ class DeobfuScripter(ServiceBase):
 
         # --- Stage 2: Deobsfucation ------------------------------------------------------------------------------
         seen_iocs: set[bytes] = set()
-        pass_techniques: list[list[str]] = []
+        tech_count: Counter[str] = Counter()
         pass_iocs: list[dict[str, set[bytes]]] = []
         techniques = first_pass
         n_pass = 0  # Ensure n_pass is bound outside of the loop
@@ -462,7 +466,7 @@ class DeobfuScripter(ServiceBase):
             layer, techiques_used, iocs = self._deobfuscripter_pass(layer, techniques, md)
             if techiques_used:
                 # Store the techniques used and new iocs found for each pass
-                pass_techniques.append(techiques_used)
+                tech_count.update(techiques_used)
                 pass_iocs.append(filter_iocs(iocs, before_deobfuscation, seen_iocs))
             else:
                 # If there are no new layers in a pass, start second pass or break
@@ -474,7 +478,7 @@ class DeobfuScripter(ServiceBase):
         # --- Final Layer -----------------------------------------------------------------------------------------
         layer, final_techniques, final_iocs = self._deobfuscripter_pass(layer, final_pass, md, final=True)
         if final_techniques:
-            pass_techniques.append(final_techniques)
+            tech_count.update(final_techniques)
             pass_iocs.append(filter_iocs(final_iocs, before_deobfuscation, seen_iocs))
 
         # Get new reversed iocs
@@ -494,7 +498,7 @@ class DeobfuScripter(ServiceBase):
                         ioc_res.add_line(f"Found {k.upper().replace('.', ' ')}: {safe_str(v)}")
                         ioc_res.add_tag(k, v)
 
-        if not pass_techniques:
+        if not tech_count:
             return
         # Cleanup final layer
         clean = self.clean_up_final_layer(layer)
@@ -509,9 +513,6 @@ class DeobfuScripter(ServiceBase):
             heuristic=heuristic,
         )
 
-        tech_count: Counter[str] = Counter()
-        for techniques_used in pass_techniques:
-            tech_count.update(techniques_used)
         for tech, count in sorted(tech_count.items()):
             heuristic.add_signature_id(tech, frequency=count)
             mres.add_line(f"{tech}, {count} time(s).")
