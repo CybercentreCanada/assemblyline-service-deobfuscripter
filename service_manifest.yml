@@ -15,7 +15,7 @@ disable_cache: false
 enabled: true
 is_external: false
 licence_count: 0
-privilged: true
+privileged: true
 
 submission_params:
   - default: false
