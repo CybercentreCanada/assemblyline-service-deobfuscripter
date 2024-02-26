@@ -34,11 +34,13 @@ def filter_iocs(
     network.static.uri tags are filtered based on segments before the path only.
     """
     new_iocs: defaultdict[str, set[bytes]] = defaultdict(set)
+    original = original.lower()
     for ioc_type in iocs:
         for ioc in sorted(iocs[ioc_type]):
             prefix = b"/".join(ioc.split(b"/", 3)[:3]) if ioc_type == "network.static.uri" else ioc
             if reversed:
                 prefix = prefix[::-1]
+            prefix = prefix.lower()
             if prefix not in seen and prefix not in original:
                 seen.add(prefix)
                 new_iocs[ioc_type].add(ioc)
