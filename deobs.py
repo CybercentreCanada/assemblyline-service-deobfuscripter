@@ -461,7 +461,7 @@ class DeobfuScripter(ServiceBase):
         techniques = first_pass
         for n_pass in range(max_attempts):
             layer, techiques_used, iocs = self._deobfuscripter_pass(layer, techniques, md)
-            if pass_iocs:
+            if iocs:
                 # Store the new IOCs found for each pass
                 pass_iocs.append(filter_iocs(iocs, before_deobfuscation, seen_iocs))
             if techiques_used:
