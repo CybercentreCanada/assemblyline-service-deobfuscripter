@@ -414,8 +414,6 @@ class DeobfuScripter(ServiceBase):
             ("Hex Int Constants", self.hex_constant),
         ]
         second_pass.extend(first_pass)
-        final_pass: TechniqueList = []
-        final_pass.extend(second_pass)
 
         code_extracts = [(".*html.*", "HTML scripts extraction", self.extract_htmlscript)]
 
@@ -474,12 +472,6 @@ class DeobfuScripter(ServiceBase):
                     # Already on second pass
                     break
                 techniques = second_pass
-
-        # --- Final Layer -----------------------------------------------------------------------------------------
-        layer, final_techniques, final_iocs = self._deobfuscripter_pass(layer, final_pass, md, final=True)
-        if final_techniques:
-            tech_count.update(final_techniques)
-            pass_iocs.append(filter_iocs(final_iocs, before_deobfuscation, seen_iocs))
 
         # Get new reversed iocs
         rev_iocs = filter_iocs(md.ioc_tags(layer[::-1]), before_deobfuscation, seen_iocs, reversed=True)
