@@ -579,22 +579,21 @@ class DeobfuScripter(ServiceBase):
         layer: bytes,
         techniques: TechniqueList,
         md: DecoderWrapper,
-        *,
-        final: object = False,
-    ) -> tuple[bytes, list[str], dict[str, set[bytes]]]:
-        techniques_used = []
+    ) -> tuple[bytes, set[str], dict[str, set[bytes]]]:
+        tree = md.multidecoder.scan(layer, 1)
+        md.extract_files(tree, 500)
+        techniques_used = {node.obfuscation for node in tree}
+        techniques_used.discard("")
+        # Since decoding and IoC search are done simultaneously and decoded results aren't researchd on depth 1,
+        # the IOCs found are those in ther layer before deobfuscation, not after.
+        iocs = get_tree_tags(tree)
+        layer = tree.flatten()
+        # DeobfuScripter specific techniques
         for name, technique in techniques:
             result = technique(layer)
             if result:
-                techniques_used.append(name)
+                techniques_used.add(name)
                 # Looks like it worked, continue with the new layer
                 layer = result
-        # Use multidecoder techniques and ioc tagging
-        tree = md.multidecoder.scan(layer) if final else md.multidecoder.scan(layer, 1)
-        md.extract_files(tree, 500)
-        obfuscations = {node.obfuscation for node in tree}
-        obfuscations.discard("")
-        techniques_used.extend(obfuscations)
-        iocs = get_tree_tags(tree)  # Get IoCs for the pass
-        layer = tree.flatten()
+
         return layer, techniques_used, iocs
