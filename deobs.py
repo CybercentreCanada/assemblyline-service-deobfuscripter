@@ -461,15 +461,15 @@ class DeobfuScripter(ServiceBase):
         tech_count: Counter[str] = Counter()
         pass_iocs: list[dict[str, set[bytes]]] = []
         techniques = first_pass
-        n_pass = 0  # Ensure n_pass is bound outside of the loop
         for n_pass in range(max_attempts):
             layer, techiques_used, iocs = self._deobfuscripter_pass(layer, techniques, md)
-            if techiques_used:
-                # Store the techniques used and new iocs found for each pass
-                tech_count.update(techiques_used)
+            if pass_iocs:
+                # Store the new IOCs found for each pass
                 pass_iocs.append(filter_iocs(iocs, before_deobfuscation, seen_iocs))
+            if techiques_used:
+                tech_count.update(techiques_used)
             else:
-                # If there are no new layers in a pass, start second pass or break
+                # If the layer hasn't changed, add second pass techniques or break
                 if len(techniques) != len(first_pass):
                     # Already on second pass
                     break
@@ -539,32 +539,25 @@ class DeobfuScripter(ServiceBase):
         )
 
         # Report new IOCs
-        new_ioc_res = ResultSection("New IOCs found after de-obfustcation", body_format=BODY_FORMAT.MEMORY_DUMP)
-        heuristic = 0
+        new_ioc_res = ResultSection(
+            "New IOCs found after de-obfustcation",
+            body_format=BODY_FORMAT.MEMORY_DUMP,
+            heuristic=Heuristic(6),
+        )
         for n_pass, iocs in enumerate(pass_iocs):
             if not iocs:
                 continue
-            new_ioc_res.add_line(f"New IOCs found in pass {n_pass}:")
+            new_ioc_res.add_line(f"New IOCs found in pass {n_pass+1}:")
             for ioc_type in iocs:
                 for ioc in sorted(iocs[ioc_type]):
-                    if n_pass == 0:  # iocs in the first pass can be found by other services
-                        heuristic = 5
-                    elif heuristic < 7:
-                        heuristic = 7 if "network" in ioc_type and ioc_type != "network.static.domain" else 6
                     new_ioc_res.add_line(f"Found {ioc_type.upper().replace('.', ' ')}: {safe_str(ioc)}")
                     new_ioc_res.add_tag(ioc_type, ioc)
         if rev_iocs:
             new_ioc_res.add_line("New IOCs found reversed in the final layer:")
             for ioc_type in rev_iocs:
-                for ioc in rev_iocs[ioc_type]:
-                    heuristic = max(
-                        7 if "network" in ioc_type and ioc_type != "network.static.domain" else 6,
-                        heuristic,
-                    )
+                for ioc in sorted(rev_iocs[ioc_type]):
                     new_ioc_res.add_line(f"Found {ioc_type.upper().replace('.', ' ')}: {safe_str(ioc)}")
                     new_ioc_res.add_tag(ioc_type, ioc)
-        if heuristic > 0:
-            new_ioc_res.set_heuristic(heuristic)
         if new_ioc_res.body:
             request.result.add_section(new_ioc_res)
 
