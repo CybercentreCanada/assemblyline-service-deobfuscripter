@@ -48,12 +48,6 @@ heuristics:
     name: De-obfuscated IOCs
     score: 100
 
-  - description: Network IOCs were found only after layered de-obfuscations
-    filetype: code/.*
-    heur_id: 7
-    name: De-obfuscated Network IOCs
-    score: 100
-
   - description: The service found interesting files during the de-obfuscation
     filetype: code/.*
     heur_id: 8

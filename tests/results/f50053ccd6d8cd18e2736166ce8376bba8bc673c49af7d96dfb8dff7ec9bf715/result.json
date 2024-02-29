@@ -1,7 +1,7 @@
 {
   "extra": {
     "drop_file": false,
-    "score": 140,
+    "score": 40,
     "sections": [
       {
         "auto_collapse": false,
@@ -30,7 +30,7 @@
       },
       {
         "auto_collapse": false,
-        "body": "// No custom JavaScript\n/**\n * @license\n * at.js 2.9.0 | (c) Adobe Systems Incorporated | All rights reserved\n * zepto.js | (c) 2010-2016 Thomas Fuchs | zeptojs.com/license\n*/\nwindow.adobe=window.adobe||{},window.adobe.target=function(){\"use strict\";var t=window,e=document,n=!e.documentMode||e.documentMode>=11;var r,o,i,c=e.compatMode&&\"CSS1Compat\"===e.compatMode&&n&&(r=window.navigator.userAgent,o=r.indexOf(\"MSIE \")>0,i=r.indexOf(\"Trident/\")>0,!(o||i)),s=t.targetGlobalSettings;if(!c||s&&!1===s.",
+        "body": "// No custom JavaScript\n/**\n * @license\n * at.js 2.9.0 | (c) Adobe Systems Incorporated | All rights reserved\n * zepto.js | (c) 2010-2016 Thomas Fuchs | zeptojs.com/license\n*/\nwindow.adobe=window.adobe||{},window.adobe.target=function(){\"use strict\";var t=window,e=document,n=!e.documentMode||e.documentMode>=11;var r,o,i,c=e.compatMode&&\"CSS1Compat\"===e.compatMode&&n&&(r=window.navigator.userAgent,o=r.indexOf(\"MSIE \")>0,i=r.indexOf(\"Trident/\")>0,!(o||i)),s=t.targetGlobalSettings;if(!c||s&&!1===s.enabled)return t.adobe=t.adobe||{},t.adobe.target={VERSION:\"\",event:{},getOffer:Ke,getOffers:yt,applyOffer:Ke,applyOffers:yt,sendNotifications:yt,trackEvent:Ke,triggerView:Ke,registerExtension:Ke,init:Ke},t.mboxCreate=Ke,t.mboxDefine=Ke,t.mboxUpdate=Ke,\"console\"in t&&\"warn\"in t.console&&(c||t.console.warn(\"AT: Adobe Target content delivery is disabled. Update your DOCTYPE to support Standards mode.\"),t.console.warn(\"AT: Adobe Target content delivery is disabled in targetGlobalSettings.\")),t.adobe.target;var u=\"undefined\"!=typeof globalThis?globalThis:\"undefined\"!=typeof window?window:\"undefined\"!=typeof global?global:\"undefined\"!=typeof self?self:{};function a(t){if(t.__esModule)return t;var e=Object.defineProperty({},\"__esModule\",{value:!0});return Object.keys(t).forEach((function(n){var r=Object.getOwnPropertyDescriptor(t,n);Object.defineProperty(e,n,r.get?r:{enumerable:!0,get:function(){return t[n]}})})),e}\n/*\n\tobject-assign\n\t(c) Sindre Sorhus\n\t@license MIT\n\t*/var f=Object.getOwnPropertySymbols,l=Object.prototype.hasOwnProperty,d=Object.prototype.propertyIsEnumerable;function p(t){if(null==t)throw new TypeError(\"Object.assign cannot be called with null or undefined\");return Object(t)}var h=function(){try{if(!Object.assign)return!1;var t=new String(\"abc\");if(t[5]=\"de\",\"5\"===Object.getOwnPropertyNames(t)[0])return!1;for(var e={},n=0;n<10;n++)e[\"_\"+String.fromCharCode(n)]=n;if(\"0123456789\"!==Object.getOwnPropertyNames(e).map((function(t){return e[t]})).join(\"\"))return!1;var r={};return\"abcdefghijklmnopqrst\".split(\"\").forEach((function(t){r[t]=t})),\"abcdefghijklmnopqrst\"===Object.keys(Object.assign({},r)).join(\"\")}catch(t){return!1}}()?Object.assign:function(t,e){for(var n,r,o=p(t),i=1;i<arguments.length;i++){for(var c in n=Object(arguments[i]))l.call(n,c)&&(o[c]=n[c]);if(f){r=f(n);for(var s=0;s<r.length;s++)d.call(n,r[s])&&(o[r[s]]=n[r[s]])}}return o};function m(t){return null==t}const{isArray:g}=Array,{prototype:v}=Object,{toString:y}=v;function b(t){return function(t){return y.call(t)}(t)}function x(t){const e=typeof t;return null!=t&&(\"object\"===e||\"function\"===e)}function w(t){return!!x(t)&&\"[object Function]\"===b(t)}function S(t){return t}function E(t){return w(t)?t:S}function T(t){return m(t)?[]:Object.keys(t)}const C=(t,e)=>e.forEach(t),k=(t,e)=>{C(n=>t(e[n],n),T(e))},I=(t,e)=>e.filter(t),N=(t,e)=>{const n={};return k((e,r)=>{t(e,r)&&(n[r]=e)},e),n};function O(t,e){if(m(e))return[];return(g(e)?I:N)(E(t),e)}function _(t){return m(t)?[]:[].concat.apply([],t)}function A(t){var e=this;const n=t?t.length:0;let r=n;for(;r-=1;)if(!w(t[r]))throw new TypeError(\"Expected a function\");return function(){let r=0;for(var o=arguments.length,i=new Array(o),c=0;c<o;c++)i[c]=arguments[c];let s=n?t[r].apply(e,i):i[0];for(;(r+=1)<n;)s=t[r].call(e,s);return s}}function q(t,e){if(m(e))return;(g(e)?C:k)(E(t),e)}function M(t){return null!=t&&\"object\"==typeof t}function P(t){return\"string\"==typeof t||!g(t)&&M(t)&&\"[object String]\"===b(t)}function D(t){if(!P(t))return-1;let e=0;const{length:n}=t;for(let r=0;r<n;r+=1)e=(e<<5)-e+t.charCodeAt(r)&4294967295;return e}function R(t){return null!=t&&function(t){return\"number\"==typeof t&&t>-1&&t%1==0&&t<=9007199254740991}(t.length)&&!w(t)}const L=(t,e)=>e.map(t);function j(t){return m(t)?[]:R(t)?P(t)?t.split(\"\"):function(t){let e=0;const{length:n}=t,r=Array(n);for(;e<n;)r[e]=t[e],e+=1;return r}(t):(e=T(t),n=t,L(t=>n[t],e));var e,n}const{prototype:V}=Object,{hasOwnProperty:H}=V;function U(t){if(null==t)return!0;if(R(t)&&(g(t)||P(t)||w(t.splice)))return!t.length;for(const e in t)if(H.call(t,e))return!1;return!0}const{prototype:B}=String,{trim:F}=B;function z(t){return m(t)?\"\":F.call(t)}function $(t){return P(t)?!z(t):U(t)}const J=t=>!$(t);function Z(t){return\"number\"==typeof t||M(t)&&\"[object Number]\"===b(t)}const{prototype:G}=Function,{prototype:K}=Object,{toString:W}=G,{hasOwnProperty:X}=K,Y=W.call(Object);function Q(t){if(!M(t)||\"[object Object]\"!==b(t))return!1;const e=function(t){return Object.getPrototypeOf(Object(t))}(t);if(null===e)return!0;const n=X.call(e,\"constructor\")&&e.constructor;return\"function\"==typeof n&&n instanceof n&&W.call(n)===Y}function tt(t,e){return g(e)?e.join(t||\"\"):\"\"}const et=(t,e)=>{const n={};return k((e,r)=>{n[r]=t(e,r)},e),n};function nt(t,e){if(m(e))return[];return(g(e)?L:et)(E(t),e)}function rt(){return(new Date).getTime()}const ot=(t,e,n)=>n.reduce(t,e),it=(t,e,n)=>{let r=e;return k((e,n)=>{r=t(r,e,n)},n),r};function ct(t,e,n){if(m(n))return e;return(g(n)?ot:i",
         "body_config": {},
         "body_format": "MEMORY_DUMP",
         "classification": "TLP:C",
@@ -38,57 +38,14 @@
         "heuristic": null,
         "promote_to": null,
         "tags": {},
-        "title_text": "First 500 bytes of the final layer:",
-        "zeroize_on_tag_safe": false
-      },
-      {
-        "auto_collapse": false,
-        "body": "New IOCs found in pass 0:\nFound FILE STRING API: CreateEvent\nNew IOCs found in pass 1:\nFound FILE STRING BLACKLISTED: Decode\nNew IOCs found reversed in the final layer:\nFound NETWORK STATIC DOMAIN: edoceD.eu",
-        "body_config": {},
-        "body_format": "MEMORY_DUMP",
-        "classification": "TLP:C",
-        "depth": 0,
-        "heuristic": {
-          "attack_ids": [],
-          "frequency": 1,
-          "heur_id": 6,
-          "score": 100,
-          "score_map": {},
-          "signatures": {}
-        },
-        "promote_to": null,
-        "tags": {
-          "file": {
-            "string": {
-              "api": [
-                "CreateEvent"
-              ],
-              "blacklisted": [
-                "Decode"
-              ]
-            }
-          },
-          "network": {
-            "static": {
-              "domain": [
-                "edoceD.eu"
-              ]
-            }
-          }
-        },
-        "title_text": "New IOCs found after de-obfustcation",
+        "title_text": "First 5000 bytes of the final layer:",
         "zeroize_on_tag_safe": false
       }
     ]
   },
   "files": {
     "extracted": [],
-    "supplementary": [
-      {
-        "name": "f50053ccd6d8cd18e2736166ce8376bba8bc673c49af7d96dfb8dff7ec9bf715_decoded_final",
-        "sha256": "472632b5d7f203fbbb21fe0fcdd00a4fb041fb46d552a131590e5d35fe1c73a0"
-      }
-    ]
+    "supplementary": []
   },
   "results": {
     "heuristics": [
@@ -101,36 +58,9 @@
           "decoded.hexadecimal",
           "encoding.base64"
         ]
-      },
-      {
-        "attack_ids": [],
-        "heur_id": 6,
-        "signatures": []
       }
     ],
-    "tags": {
-      "file.string.api": [
-        {
-          "heur_id": 6,
-          "signatures": [],
-          "value": "CreateEvent"
-        }
-      ],
-      "file.string.blacklisted": [
-        {
-          "heur_id": 6,
-          "signatures": [],
-          "value": "Decode"
-        }
-      ],
-      "network.static.domain": [
-        {
-          "heur_id": 6,
-          "signatures": [],
-          "value": "edoceD.eu"
-        }
-      ]
-    },
+    "tags": {},
     "temp_submission_data": {}
   }
 }
