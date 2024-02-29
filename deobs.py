@@ -463,9 +463,8 @@ class DeobfuScripter(ServiceBase):
         techniques = first_pass
         for n_pass in range(max_attempts):
             layer, techiques_used, iocs = self._deobfuscripter_pass(layer, techniques, md)
-            if iocs:
-                # Store the new IOCs found for each pass
-                pass_iocs.append(filter_iocs(iocs, before_deobfuscation, seen_iocs))
+            # Store the new IOCs found for each pass
+            pass_iocs.append(filter_iocs(iocs, before_deobfuscation, seen_iocs))
             if techiques_used:
                 tech_count.update(techiques_used)
             else:
@@ -541,13 +540,13 @@ class DeobfuScripter(ServiceBase):
         for n_pass, iocs in enumerate(pass_iocs):
             if not iocs:
                 continue
-            new_ioc_res.add_line(f"New IOCs found in pass {n_pass+1}:")
+            new_ioc_res.add_line(f"New IOCs found in pass {n_pass}:")
             for ioc_type in iocs:
                 for ioc in sorted(iocs[ioc_type]):
                     new_ioc_res.add_line(f"Found {ioc_type.upper().replace('.', ' ')}: {safe_str(ioc)}")
                     new_ioc_res.add_tag(ioc_type, ioc)
         if rev_iocs:
-            new_ioc_res.add_line("New IOCs found reversed in the final layer:")
+            new_ioc_res.add_line("Reversed IOCs found in the final layer:")
             for ioc_type in rev_iocs:
                 for ioc in sorted(rev_iocs[ioc_type]):
                     new_ioc_res.add_line(f"Found {ioc_type.upper().replace('.', ' ')}: {safe_str(ioc)}")
