@@ -42,7 +42,7 @@
       },
       {
         "auto_collapse": false,
-        "body": "New IOCs found in pass 1:\nFound FILE STRING BLACKLISTED: Scripting.FileSystemObject\nFound FILE STRING BLACKLISTED: WScript.Shell\nFound NETWORK STATIC DOMAIN: jXALS.open\nFound NETWORK STATIC DOMAIN: objShell.Run\nFound NETWORK STATIC DOMAIN: schemas.microsoft.com\nFound NETWORK STATIC DOMAIN: textbin.net\nFound NETWORK STATIC DOMAIN: www.w3.org\nFound FILE STRING API: CopyFile\nFound FILE STRING API: ShellExecute\nFound NETWORK STATIC URI: http://schemas.microsoft.com/windows/2003/08/printing/printschemaframework\nFound NETWORK STATIC URI: http://www.w3.org/2001/XMLSchema\nFound NETWORK STATIC URI: https://textbin.net/raw/ezjmofz3s6\nNew IOCs found reversed in the final layer:\nFound NETWORK STATIC URI: https://paste.ee/d/JDCTl/0\nFound NETWORK STATIC DOMAIN: paste.ee",
+        "body": "New IOCs found in pass 1:\nFound FILE STRING BLACKLISTED: Scripting.FileSystemObject\nFound FILE STRING BLACKLISTED: WScript.Shell\nFound NETWORK STATIC DOMAIN: jXALS.open\nFound NETWORK STATIC DOMAIN: objShell.Run\nFound NETWORK STATIC DOMAIN: schemas.microsoft.com\nFound NETWORK STATIC DOMAIN: textbin.net\nFound NETWORK STATIC DOMAIN: www.w3.org\nFound FILE STRING API: CopyFile\nFound FILE STRING API: ShellExecute\nFound NETWORK STATIC URI: http://schemas.microsoft.com/windows/2003/08/printing/printschemaframework\nFound NETWORK STATIC URI: http://www.w3.org/2001/XMLSchema\nFound NETWORK STATIC URI: https://textbin.net/raw/ezjmofz3s6\nReversed IOCs found in the final layer:\nFound NETWORK STATIC URI: https://paste.ee/d/JDCTl/0\nFound NETWORK STATIC DOMAIN: paste.ee",
         "body_config": {},
         "body_format": "MEMORY_DUMP",
         "classification": "TLP:C",
@@ -50,7 +50,7 @@
         "heuristic": {
           "attack_ids": [],
           "frequency": 1,
-          "heur_id": 7,
+          "heur_id": 6,
           "score": 100,
           "score_map": {},
           "signatures": {}
@@ -115,85 +115,85 @@
       },
       {
         "attack_ids": [],
-        "heur_id": 7,
+        "heur_id": 6,
         "signatures": []
       }
     ],
     "tags": {
       "file.string.api": [
         {
-          "heur_id": 7,
+          "heur_id": 6,
           "signatures": [],
           "value": "CopyFile"
         },
         {
-          "heur_id": 7,
+          "heur_id": 6,
           "signatures": [],
           "value": "ShellExecute"
         }
       ],
       "file.string.blacklisted": [
         {
-          "heur_id": 7,
+          "heur_id": 6,
           "signatures": [],
           "value": "Scripting.FileSystemObject"
         },
         {
-          "heur_id": 7,
+          "heur_id": 6,
           "signatures": [],
           "value": "WScript.Shell"
         }
       ],
       "network.static.domain": [
         {
-          "heur_id": 7,
+          "heur_id": 6,
           "signatures": [],
           "value": "jXALS.open"
         },
         {
-          "heur_id": 7,
+          "heur_id": 6,
           "signatures": [],
           "value": "objShell.Run"
         },
         {
-          "heur_id": 7,
+          "heur_id": 6,
           "signatures": [],
           "value": "paste.ee"
         },
         {
-          "heur_id": 7,
+          "heur_id": 6,
           "signatures": [],
           "value": "schemas.microsoft.com"
         },
         {
-          "heur_id": 7,
+          "heur_id": 6,
           "signatures": [],
           "value": "textbin.net"
         },
         {
-          "heur_id": 7,
+          "heur_id": 6,
           "signatures": [],
           "value": "www.w3.org"
         }
       ],
       "network.static.uri": [
         {
-          "heur_id": 7,
+          "heur_id": 6,
           "signatures": [],
           "value": "http://schemas.microsoft.com/windows/2003/08/printing/printschemaframework"
         },
         {
-          "heur_id": 7,
+          "heur_id": 6,
           "signatures": [],
           "value": "http://www.w3.org/2001/XMLSchema"
         },
         {
-          "heur_id": 7,
+          "heur_id": 6,
           "signatures": [],
           "value": "https://paste.ee/d/JDCTl/0"
         },
         {
-          "heur_id": 7,
+          "heur_id": 6,
           "signatures": [],
           "value": "https://textbin.net/raw/ezjmofz3s6"
         }

