@@ -34,11 +34,13 @@ def filter_iocs(
     network.static.uri tags are filtered based on segments before the path only.
     """
     new_iocs: defaultdict[str, set[bytes]] = defaultdict(set)
+    original = original.lower()
     for ioc_type in iocs:
         for ioc in sorted(iocs[ioc_type]):
             prefix = b"/".join(ioc.split(b"/", 3)[:3]) if ioc_type == "network.static.uri" else ioc
             if reversed:
                 prefix = prefix[::-1]
+            prefix = prefix.lower()
             if prefix not in seen and prefix not in original:
                 seen.add(prefix)
                 new_iocs[ioc_type].add(ioc)
@@ -414,8 +416,6 @@ class DeobfuScripter(ServiceBase):
             ("Hex Int Constants", self.hex_constant),
         ]
         second_pass.extend(first_pass)
-        final_pass: TechniqueList = []
-        final_pass.extend(second_pass)
 
         code_extracts = [(".*html.*", "HTML scripts extraction", self.extract_htmlscript)]
 
@@ -461,25 +461,18 @@ class DeobfuScripter(ServiceBase):
         tech_count: Counter[str] = Counter()
         pass_iocs: list[dict[str, set[bytes]]] = []
         techniques = first_pass
-        n_pass = 0  # Ensure n_pass is bound outside of the loop
         for n_pass in range(max_attempts):
             layer, techiques_used, iocs = self._deobfuscripter_pass(layer, techniques, md)
+            # Store the new IOCs found for each pass
+            pass_iocs.append(filter_iocs(iocs, before_deobfuscation, seen_iocs))
             if techiques_used:
-                # Store the techniques used and new iocs found for each pass
                 tech_count.update(techiques_used)
-                pass_iocs.append(filter_iocs(iocs, before_deobfuscation, seen_iocs))
             else:
-                # If there are no new layers in a pass, start second pass or break
+                # If the layer hasn't changed, add second pass techniques or break
                 if len(techniques) != len(first_pass):
                     # Already on second pass
                     break
                 techniques = second_pass
-
-        # --- Final Layer -----------------------------------------------------------------------------------------
-        layer, final_techniques, final_iocs = self._deobfuscripter_pass(layer, final_pass, md, final=True)
-        if final_techniques:
-            tech_count.update(final_techniques)
-            pass_iocs.append(filter_iocs(final_iocs, before_deobfuscation, seen_iocs))
 
         # Get new reversed iocs
         rev_iocs = filter_iocs(md.ioc_tags(layer[::-1]), before_deobfuscation, seen_iocs, reversed=True)
@@ -539,32 +532,25 @@ class DeobfuScripter(ServiceBase):
         )
 
         # Report new IOCs
-        new_ioc_res = ResultSection("New IOCs found after de-obfustcation", body_format=BODY_FORMAT.MEMORY_DUMP)
-        heuristic = 0
+        new_ioc_res = ResultSection(
+            "New IOCs found after de-obfustcation",
+            body_format=BODY_FORMAT.MEMORY_DUMP,
+            heuristic=Heuristic(6),
+        )
         for n_pass, iocs in enumerate(pass_iocs):
             if not iocs:
                 continue
             new_ioc_res.add_line(f"New IOCs found in pass {n_pass}:")
             for ioc_type in iocs:
                 for ioc in sorted(iocs[ioc_type]):
-                    if n_pass == 0:  # iocs in the first pass can be found by other services
-                        heuristic = 5
-                    elif heuristic < 7:
-                        heuristic = 7 if "network" in ioc_type and ioc_type != "network.static.domain" else 6
                     new_ioc_res.add_line(f"Found {ioc_type.upper().replace('.', ' ')}: {safe_str(ioc)}")
                     new_ioc_res.add_tag(ioc_type, ioc)
         if rev_iocs:
-            new_ioc_res.add_line("New IOCs found reversed in the final layer:")
+            new_ioc_res.add_line("Reversed IOCs found in the final layer:")
             for ioc_type in rev_iocs:
-                for ioc in rev_iocs[ioc_type]:
-                    heuristic = max(
-                        7 if "network" in ioc_type and ioc_type != "network.static.domain" else 6,
-                        heuristic,
-                    )
+                for ioc in sorted(rev_iocs[ioc_type]):
                     new_ioc_res.add_line(f"Found {ioc_type.upper().replace('.', ' ')}: {safe_str(ioc)}")
                     new_ioc_res.add_tag(ioc_type, ioc)
-        if heuristic > 0:
-            new_ioc_res.set_heuristic(heuristic)
         if new_ioc_res.body:
             request.result.add_section(new_ioc_res)
 
@@ -594,22 +580,21 @@ class DeobfuScripter(ServiceBase):
         layer: bytes,
         techniques: TechniqueList,
         md: DecoderWrapper,
-        *,
-        final: object = False,
-    ) -> tuple[bytes, list[str], dict[str, set[bytes]]]:
-        techniques_used = []
+    ) -> tuple[bytes, set[str], dict[str, set[bytes]]]:
+        tree = md.multidecoder.scan(layer, 1)
+        md.extract_files(tree, 500)
+        techniques_used = {node.obfuscation for node in tree}
+        techniques_used.discard("")
+        # Since decoding and IoC search are done simultaneously and decoded results aren't researchd on depth 1,
+        # the IOCs found are those in ther layer before deobfuscation, not after.
+        iocs = get_tree_tags(tree)
+        layer = tree.flatten()
+        # DeobfuScripter specific techniques
         for name, technique in techniques:
             result = technique(layer)
             if result:
-                techniques_used.append(name)
+                techniques_used.add(name)
                 # Looks like it worked, continue with the new layer
                 layer = result
-        # Use multidecoder techniques and ioc tagging
-        tree = md.multidecoder.scan(layer) if final else md.multidecoder.scan(layer, 1)
-        md.extract_files(tree, 500)
-        obfuscations = {node.obfuscation for node in tree}
-        obfuscations.discard("")
-        techniques_used.extend(obfuscations)
-        iocs = get_tree_tags(tree)  # Get IoCs for the pass
-        layer = tree.flatten()
+
         return layer, techniques_used, iocs
