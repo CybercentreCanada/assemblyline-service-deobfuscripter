@@ -5,7 +5,7 @@ ENV SERVICE_PATH deobs.DeobfuScripter
 
 # Install python dependencies
 COPY requirements.txt requirements.txt
-RUN pip install --no-cache-dir --user --requirement -U requirements.txt && rm -rf ~/.cache/pip
+RUN pip install --no-cache-dir --upgrade --user --requirement requirements.txt && rm -rf ~/.cache/pip
 
 # Copy Crowbar service code
 WORKDIR /opt/al_service
