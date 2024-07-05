@@ -1,11 +1,11 @@
 {
   "extra": {
     "drop_file": false,
-    "score": 40,
+    "score": 50,
     "sections": [
       {
         "auto_collapse": false,
-        "body": "Hex Charcodes, 1 time(s).\nconcatenation, 1 time(s).\ndecoded.hexadecimal, 1 time(s).\nencoding.base64, 1 time(s).",
+        "body": "Hex Charcodes, 1 time(s).\nMixedCase, 1 time(s).\nconcatenation, 1 time(s).\ndecoded.hexadecimal, 1 time(s).\nencoding.base64, 1 time(s).",
         "body_config": {},
         "body_format": "TEXT",
         "classification": "TLP:C",
@@ -14,10 +14,11 @@
           "attack_ids": [],
           "frequency": 1,
           "heur_id": 1,
-          "score": 40,
+          "score": 50,
           "score_map": {},
           "signatures": {
             "Hex Charcodes": 1,
+            "MixedCase": 1,
             "concatenation": 1,
             "decoded.hexadecimal": 1,
             "encoding.base64": 1
@@ -54,6 +55,7 @@
         "heur_id": 1,
         "signatures": [
           "Hex Charcodes",
+          "MixedCase",
           "concatenation",
           "decoded.hexadecimal",
           "encoding.base64"
