@@ -42,7 +42,7 @@
       },
       {
         "auto_collapse": false,
-        "body": "New IOCs found in pass 1:\nFound FILE STRING BLACKLISTED: Scripting.FileSystemObject\nFound FILE STRING BLACKLISTED: WScript.Shell\nFound NETWORK STATIC DOMAIN: jXALS.open\nFound NETWORK STATIC DOMAIN: objShell.Run\nFound NETWORK STATIC DOMAIN: schemas.microsoft.com\nFound NETWORK STATIC DOMAIN: textbin.net\nFound NETWORK STATIC DOMAIN: www.w3.org\nFound FILE STRING API: CopyFile\nFound FILE STRING API: ShellExecute\nFound NETWORK STATIC URI: http://schemas.microsoft.com/windows/2003/08/printing/printschemaframework\nFound NETWORK STATIC URI: http://www.w3.org/2001/XMLSchema\nFound NETWORK STATIC URI: https://textbin.net/raw/ezjmofz3s6\nReversed IOCs found in the final layer:\nFound NETWORK STATIC URI: https://paste.ee/d/JDCTl/0\nFound NETWORK STATIC DOMAIN: paste.ee",
+        "body": "New IOCs found in pass 1:\nFound FILE STRING BLACKLISTED: Scripting.FileSystemObject\nFound FILE STRING BLACKLISTED: WScript.Shell\nFound FILE STRING API: CopyFile\nFound FILE STRING API: ShellExecute\nFound NETWORK STATIC DOMAIN: jXALS.open\nFound NETWORK STATIC DOMAIN: schemas.microsoft.com\nFound NETWORK STATIC DOMAIN: textbin.net\nFound NETWORK STATIC DOMAIN: www.w3.org\nFound NETWORK STATIC URI: http://schemas.microsoft.com/windows/2003/08/printing/printschemaframework\nFound NETWORK STATIC URI: http://www.w3.org/2001/XMLSchema\nFound NETWORK STATIC URI: https://textbin.net/raw/ezjmofz3s6\nReversed IOCs found in the final layer:\nFound NETWORK STATIC URI: https://paste.ee/d/JDCTl/0\nFound NETWORK STATIC DOMAIN: paste.ee",
         "body_config": {},
         "body_format": "MEMORY_DUMP",
         "classification": "TLP:C",
@@ -73,7 +73,6 @@
             "static": {
               "domain": [
                 "jXALS.open",
-                "objShell.Run",
                 "schemas.microsoft.com",
                 "textbin.net",
                 "www.w3.org",
@@ -149,11 +148,6 @@
           "heur_id": 6,
           "signatures": [],
           "value": "jXALS.open"
-        },
-        {
-          "heur_id": 6,
-          "signatures": [],
-          "value": "objShell.Run"
         },
         {
           "heur_id": 6,
