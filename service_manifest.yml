@@ -2,19 +2,24 @@ name: DeobfuScripter
 version: $SERVICE_TAG
 description: Static script de-obfuscator. The purpose is not to get surgical de-obfuscation, but rather to extract obfuscated IOCs.
 
+# Regex defining the types of files the service accepts and rejects
 accepts: code/.*
 rejects: empty|metadata/.*
 
+# At which stage the service should run (one of FILTER, EXTRACT, CORE, SECONDARY, POST, REVIEW)
+# NOTE: Stages are executed in the order defined in the list
 stage: CORE
+# Which category the service is part of (one of Antivirus, Dynamic Analysis, External, Extraction, Filtering, Internet Connected, Networking, Static Analysis)
 category: Static Analysis
 
+# Does the service require access to the file to perform its task
+# If set to false, the service will only have access to the file metadata (e.g. Hashes, size, type, ...)
 file_required: true
+# Maximum execution time the service has before it's considered to be timed out
 timeout: 420
-disable_cache: false
 
+# is the service enabled by default
 enabled: true
-is_external: false
-licence_count: 0
 privileged: true
 
 submission_params:
@@ -56,5 +61,5 @@ heuristics:
 
 docker_config:
   image: ${REGISTRY}cccs/assemblyline-service-deobfuscripter:$SERVICE_TAG
-  cpu_cores: 1
+  cpu_cores: 1.0
   ram_mb: 2048
