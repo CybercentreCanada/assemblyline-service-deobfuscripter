@@ -1,6 +1,6 @@
 {
   "template": "https://github.com/CybercentreCanada/assemblyline-service-template.git",
-  "commit": "6a32666117e30dbfb990bfaf6e7c9eb25badd03a",
+  "commit": "99becf8ed2990a4063a5bb1f8ce878824a5a1a7b",
   "checkout": null,
   "context": {
     "cookiecutter": {
@@ -8,15 +8,15 @@
       "__svc_name": "deobfuscripter",
       "__repository": "assemblyline-service-deobfuscripter",
       "__pkg_name": "deobfuscripter",
+      "class_name": "DeobfuScripter",
       "short_description": "Static script de-obfuscator. The purpose is not to get surgical de-obfuscation, but rather to extract obfuscated IOCs.",
-      "short_description_fr": "D\u00e9sobfuscateur de scripts statiques. L'objectif n'est pas d'obtenir une d\u00e9sobfuscation chirurgicale, mais plut\u00f4t d'extraire les IOC obfusqu\u00e9s.",
+      "short_description_fr": "Désobfuscateur de scripts statiques. L'objectif n'est pas d'obtenir une désobfuscation chirurgicale, mais plutôt d'extraire les IOC obfusqués.",
       "stage": "CORE",
       "category": "Static Analysis",
       "org_name_full": "CybercentreCanada",
       "org_name_short": "cccs",
       "license": "mit",
-      "_template": "https://github.com/CybercentreCanada/assemblyline-service-template.git",
-      "class_name": "DeobfuScripter"
+      "_template": "https://github.com/CybercentreCanada/assemblyline-service-template.git"
     }
   },
   "directory": null
