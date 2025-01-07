@@ -1,3 +1,5 @@
+assemblyline
+assemblyline-v4-service
 beautifulsoup4
 lxml
 regex
