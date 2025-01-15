@@ -1,7 +1,9 @@
+assemblyline
+assemblyline-v4-service
 beautifulsoup4
 lxml
 regex
 # assemblyline-service-utilities also depends on multidecoder and pins the version number.
 # Make sure the version ranges are compatible when upgrading.
-multidecoder>=1.3.1,<2.0
+multidecoder>=1.6.3,<2.0
 assemblyline-service-utilities>=4.5,<4.6

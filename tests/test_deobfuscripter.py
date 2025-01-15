@@ -13,7 +13,7 @@ RESULTS_FOLDER = os.path.join(os.path.dirname(__file__), "results")
 SAMPLES_FOLDER = os.path.join(os.path.dirname(__file__), "samples")
 
 # Initialize test helper
-service_class = load_module_by_path("deobs.DeobfuScripter", os.path.join(os.path.dirname(__file__), ".."))
+service_class = load_module_by_path("deobfuscripter.deobfuscripter.DeobfuScripter", os.path.join(os.path.dirname(__file__), ".."))
 th = TestHelper(service_class, RESULTS_FOLDER, SAMPLES_FOLDER)
 
 
