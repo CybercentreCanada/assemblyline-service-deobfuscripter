@@ -1,31 +1,31 @@
-extends:
-  parameters:
-    is_public: 'true'
-    labels:
-      classification: UNCLASSIFIED
-    samples_repo: unittest-samples
-  template: stages/deploy-service.yaml@PipelineTemplates
 name: build
-pool:
-  vmImage: ubuntu-latest
-pr: none
-resources:
-  repositories:
-  - endpoint: github-repo-sa
-    name: CybercentreCanada/assemblyline-pipeline-templates
-    ref: refs/heads/main
-    repository: PipelineTemplates
-    trigger: none
-    type: github
-  - endpoint: github-repo-sa
-    name: $(unittest_samples_repository)
-    ref: main
-    repository: unittest-samples
-    trigger: none
-    type: github
+variables:
+- group: unittest-samples
 trigger:
   tags:
     include:
     - v*
-variables:
-- group: unittest-samples
+pr: none
+pool:
+  vmImage: ubuntu-latest
+resources:
+  repositories:
+  - repository: PipelineTemplates
+    type: github
+    name: CybercentreCanada/assemblyline-pipeline-templates
+    ref: refs/heads/main
+    endpoint: github-repo-sa
+    trigger: none
+  - repository: unittest-samples
+    type: github
+    name: $(unittest_samples_repository)
+    ref: main
+    endpoint: github-repo-sa
+    trigger: none
+extends:
+  template: stages/deploy-service.yaml@PipelineTemplates
+  parameters:
+    is_public: 'true'
+    samples_repo: unittest-samples
+    labels:
+      classification: UNCLASSIFIED
