@@ -12,8 +12,9 @@ import regex
 from assemblyline.common.str_utils import safe_str
 from assemblyline_service_utilities.common.extractor.decode_wrapper import DecoderWrapper, get_tree_tags
 from assemblyline_v4_service.common.base import ServiceBase
-from assemblyline_v4_service.common.request import MaxExtractedExceeded, ServiceRequest
+from assemblyline_v4_service.common.request import ServiceRequest
 from assemblyline_v4_service.common.result import BODY_FORMAT, Heuristic, Result, ResultSection
+from assemblyline_v4_service.common.task import MaxExtractedExceeded
 from bs4 import BeautifulSoup
 from multidecoder._version import version as multidecoder_version
 
