@@ -10,10 +10,18 @@ from typing import Callable
 
 import regex
 from assemblyline.common.str_utils import safe_str
-from assemblyline_service_utilities.common.extractor.decode_wrapper import DecoderWrapper, get_tree_tags
+from assemblyline_service_utilities.common.extractor.decode_wrapper import (
+    DecoderWrapper,
+    get_tree_tags,
+)
 from assemblyline_v4_service.common.base import ServiceBase
 from assemblyline_v4_service.common.request import ServiceRequest
-from assemblyline_v4_service.common.result import BODY_FORMAT, Heuristic, Result, ResultSection
+from assemblyline_v4_service.common.result import (
+    BODY_FORMAT,
+    Heuristic,
+    Result,
+    ResultSection,
+)
 from assemblyline_v4_service.common.task import MaxExtractedExceeded
 from bs4 import BeautifulSoup
 from multidecoder._version import version as multidecoder_version
@@ -21,7 +29,7 @@ from multidecoder._version import version as multidecoder_version
 # Type declarations
 TechniqueList = list[tuple[str, Callable[[bytes], bytes]]]
 
-BINCHARS = bytes(set(range(256))-set(range(0x20, 127)))
+BINCHARS = bytes(set(range(256)) - set(range(0x20, 127)))
 
 # Regexes
 _RE_CHARCODE_HEX = regex.compile(rb"(?i)(?:\\x|%)([a-f0-9]{2})")
@@ -37,12 +45,19 @@ _RE_FAKE_ARRAY_VAR_REPLACE = regex.compile(rb"var\s+([^=]+)\s*=")
 _RE_COMMA_SEP = regex.compile(rb"\s*,\s*")
 _RE_ARRAY_OF_STRINGS = regex.compile(rb"var\s+([^\s=]+)\s*=\s*\[([^\]]+)\]\s*;")
 _RE_POWERSHELL_VAR_STRING = regex.compile(rb"(\$(?:\w+|{[^\}]+\}))\s*=[^=]\s*[\"\']([^\"\']+)[\"\']")
-_RE_POWERSHELL_VAR_FUNCTION =  regex.compile(rb"(\$(?:\w+|{[^\}]+\}))\s*=\s*([^=\"\'\s$]{3,50})[\s]")
+_RE_POWERSHELL_VAR_FUNCTION = regex.compile(rb"(\$(?:\w+|{[^\}]+\}))\s*=\s*([^=\"\'\s$]{3,50})[\s]")
 _RE_POWERSHELL_VAR_REP = regex.compile(rb"\$((?:\w+|{[^\}]+\}))\s*=")
 _RE_POWERSHELL_CARET = regex.compile(rb'"[^"]+[A-Za-z0-9](\^|`)+[A-Za-z0-9][^"]+"')
-_RE_MSOFFICE_VARIABLES = regex.compile(rb'^(\s*(\w+)\s*=\s*\w*\s*\+?\s(["\'])(.+)["\']\s*\+\s*vbCrLf\s*$)', flags=regex.M)
-_RE_MSWORDMACRO_VAR = regex.compile(rb"^\s*((?:Const[\s]*)?(\w+)\s*=" rb'\s*((?:["][^"]+["]|[\'][^\']+[\']|[0-9]*)))[\s\r]*$', flags = regex.MULTILINE | regex.DOTALL)
-_RE_MSWORD_STACKED_STRINGS = regex.compile(rb'^\s*((\w+)\s*=\s*(\w+)\s*[+&]\s*((?:["][^"]+["]|[\'][^\']+[\'])))[\s\r]*$', regex.MULTILINE | regex.DOTALL)
+_RE_MSOFFICE_VARIABLES = regex.compile(
+    rb'^(\s*(\w+)\s*=\s*\w*\s*\+?\s(["\'])(.+)["\']\s*\+\s*vbCrLf\s*$)', flags=regex.M
+)
+_RE_MSWORDMACRO_VAR = regex.compile(
+    rb"^\s*((?:Const[\s]*)?(\w+)\s*=" rb'\s*((?:["][^"]+["]|[\'][^\']+[\']|[0-9]*)))[\s\r]*$',
+    flags=regex.MULTILINE | regex.DOTALL,
+)
+_RE_MSWORD_STACKED_STRINGS = regex.compile(
+    rb'^\s*((\w+)\s*=\s*(\w+)\s*[+&]\s*((?:["][^"]+["]|[\'][^\']+[\'])))[\s\r]*$', regex.MULTILINE | regex.DOTALL
+)
 _RE_XORSTRINGS = regex.compile(rb'(\w+\("((?:[0-9A-Fa-f][0-9A-Fa-f])+)"\s*,\s*"([^"]+)"\))')
 _RE_DEOBFUSCRIPTER_ARTIFACT = regex.compile(rb"<deobsfuscripter:[^>]+>\n?")
 _RE_FILETYPE_HTML = regex.compile(".*html.*")
@@ -164,8 +179,10 @@ class DeobfuScripter(ServiceBase):
     @staticmethod
     def javascript_join(text: bytes) -> bytes:
         """Replace a join call on an array with the resulting string."""
+
         def join_rep(match):
             return _RE_QUOTE_COMMA_SEP.sub(match.group(2), match.group(1))
+
         return _RE_JS_JOIN.sub(join_rep, text)
 
     @staticmethod
