@@ -51,8 +51,7 @@ def filter_iocs(
 class DeobfuScripter(ServiceBase):
     """Service for deobfuscating scripts."""
 
-    VALIDCHARS = b" 0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
-    BINCHARS = bytes(list(set(range(256)) - set(VALIDCHARS)))
+    BINCHARS = bytes(set(range(256))-set(range(0x20, 127)))
 
     def __init__(self, config: dict | None = None) -> None:
         super().__init__(config)
@@ -65,7 +64,7 @@ class DeobfuScripter(ServiceBase):
 
     def printable_ratio(self, text: bytes) -> float:
         """Calcuate the ratio of printable characters to total characters in text."""
-        return float(float(len(text.translate(None, self.BINCHARS))) / float(len(text)))
+        return len(text.translate(None, self.BINCHARS)) / len(text)
 
     @staticmethod
     def encode_codepoint(codepoint: int) -> bytes:
