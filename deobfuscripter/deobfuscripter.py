@@ -21,6 +21,30 @@ from multidecoder._version import version as multidecoder_version
 # Type declarations
 TechniqueList = list[tuple[str, Callable[[bytes], bytes]]]
 
+# Regexes
+_RE_CHARCODE_HEX = regex.compile(rb"(?i)(?:\\x|%)([a-f0-9]{2})")
+_RE_CHARCODE_OCT = regex.compile(rb"\\([0-7]{1,3})")
+_RE_CHARCODE_UNICODE = regex.compile(rb"(?i)(?:\\u|%u)([a-f0-9]{4})")
+_RE_CHARCODE_XML_HEX = regex.compile(rb"(?i)&#x([a-z0-9]{1,6});")
+_RE_CHARCODE_XML = regex.compile(rb"&#([0-9]{1,7});")
+_RE_HEX_CONSTANT = regex.compile(rb"(?i)\b0x([a-f0-9]{1,16})\b")
+_RE_JS_JOIN = regex.compile(rb'\[\s*((?:"[^"\n]*"\s*,\s*)*"[^"\n]*")\s*\]\.join\("([^"\n]*)"\)')
+_RE_QUOTE_COMMA_SEP = regex.compile(rb'"\s*,\s*"')
+_RE_VAR_OF_FAKE_ARRAYS = regex.compile(rb"var\s+([^\s=]+)\s*=\s*\[([^\]]+)\]\[(\d+)\]")
+_RE_FAKE_ARRAY_VAR_REPLACE = regex.compile(rb"var\s+([^=]+)\s*=")
+_RE_COMMA_SEP = regex.compile(rb"\s*,\s*")
+_RE_ARRAY_OF_STRINGS = regex.compile(rb"var\s+([^\s=]+)\s*=\s*\[([^\]]+)\]\s*;")
+_RE_POWERSHELL_VAR_STRING = regex.compile(rb"(\$(?:\w+|{[^\}]+\}))\s*=[^=]\s*[\"\']([^\"\']+)[\"\']")
+_RE_POWERSHELL_VAR_FUNCTION =  regex.compile(rb"(\$(?:\w+|{[^\}]+\}))\s*=\s*([^=\"\'\s$]{3,50})[\s]")
+_RE_POWERSHELL_VAR_REP = regex.compile(rb"\$((?:\w+|{[^\}]+\}))\s*=")
+_RE_POWERSHELL_CARET = regex.compile(rb'"[^"]+[A-Za-z0-9](\^|`)+[A-Za-z0-9][^"]+"')
+_RE_MSOFFICE_VARIABLES = regex.compile(rb'^(\s*(\w+)\s*=\s*\w*\s*\+?\s(["\'])(.+)["\']\s*\+\s*vbCrLf\s*$)', flags=regex.M)
+_RE_MSWORDMACRO_VAR = regex.compile(rb"^\s*((?:Const[\s]*)?(\w+)\s*=" rb'\s*((?:["][^"]+["]|[\'][^\']+[\']|[0-9]*)))[\s\r]*$', flags = regex.MULTILINE | regex.DOTALL)
+_RE_MSWORD_STACKED_STRINGS = regex.compile(rb'^\s*((\w+)\s*=\s*(\w+)\s*[+&]\s*((?:["][^"]+["]|[\'][^\']+[\'])))[\s\r]*$', regex.MULTILINE | regex.DOTALL)
+_RE_XORSTRINGS = regex.compile(rb'(\w+\("((?:[0-9A-Fa-f][0-9A-Fa-f])+)"\s*,\s*"([^"]+)"\))')
+_RE_DEOBFUSCRIPTER_ARTIFACT = regex.compile(rb"<deobsfuscripter:[^>]+>\n?")
+_RE_FILETYPE_HTML = regex.compile(".*html.*")
+
 
 def filter_iocs(
     iocs: dict[str, set[bytes]],
@@ -101,49 +125,48 @@ class DeobfuScripter(ServiceBase):
     @staticmethod
     def charcode_hex(text: bytes) -> bytes:
         """Replace hex character codes with the corresponding characters."""
-        return regex.sub(rb"(?i)(?:\\x|%)([a-f0-9]{2})", lambda m: binascii.unhexlify(m.group(1)), text)
+        return _RE_CHARCODE_HEX.sub(lambda m: binascii.unhexlify(m.group(1)), text)
 
     # TODO: find a way to prevent charcode_oct from mangling windows filepaths with sections that start with 0-7
     @staticmethod
     def charcode_oct(text: bytes) -> bytes:
         """Replace octal character codes with the corresponding characters."""
-        return regex.sub(rb"\\([0-7]{1,3})", partial(DeobfuScripter.codepoint_sub, base=8), text)
+        return _RE_CHARCODE_OCT.sub(partial(DeobfuScripter.codepoint_sub, base=8), text)
 
     @staticmethod
     def charcode_unicode(text: bytes) -> bytes:
         """Replace unicode character codes with the corresponding utf-8 byte sequence."""
-        return regex.sub(rb"(?i)(?:\\u|%u)([a-f0-9]{4})", DeobfuScripter.codepoint_sub, text)
+        return _RE_CHARCODE_UNICODE.sub(DeobfuScripter.codepoint_sub, text)
 
     @staticmethod
     def charcode_xml(text: bytes) -> bytes:
         """Replace XML escape sequences with the corresponding character."""
-        output = regex.sub(rb"(?i)&#x([a-z0-9]{1,6});", DeobfuScripter.codepoint_sub, text)
-        output = regex.sub(rb"&#([0-9]{1,7});", partial(DeobfuScripter.codepoint_sub, base=10), output)
+        output = _RE_CHARCODE_XML_HEX.sub(DeobfuScripter.codepoint_sub, text)
+        output = _RE_CHARCODE_XML.sub(partial(DeobfuScripter.codepoint_sub, base=10), output)
         return output
 
     @staticmethod
     def hex_constant(text: bytes) -> bytes:
         """Replace hexadecimal integer constants with decimal ones."""
-        return regex.sub(rb"(?i)\b0x([a-f0-9]{1,16})\b", lambda m: str(int(m.group(1), 16)).encode("utf-8"), text)
+        return _RE_HEX_CONSTANT.sub(lambda m: str(int(m.group(1), 16)).encode("utf-8"), text)
 
     @staticmethod
     def javascript_join(text: bytes) -> bytes:
         """Replace a join call on an array with the resulting string."""
-        join_re = rb'\[\s*((?:"[^"\n]*"\s*,\s*)*"[^"\n]*")\s*\]\.join\("([^"\n]*)"\)'
         def join_rep(match):
-            return regex.sub(rb'"\s*,\s*"', match.group(2), match.group(1))
-        return regex.sub(join_re, join_rep, text)
+            return _RE_QUOTE_COMMA_SEP.sub(match.group(2), match.group(1))
+        return _RE_JS_JOIN.sub(join_rep, text)
 
     @staticmethod
     def vars_of_fake_arrays(text: bytes) -> bytes:
         """Parse variables of fake arrays."""
-        replacements = regex.findall(rb"var\s+([^\s=]+)\s*=\s*\[([^\]]+)\]\[(\d+)\]", text)
+        replacements = _RE_VAR_OF_FAKE_ARRAYS.findall(text)
         if replacements:
             #    ,- Make sure we do not process these again
-            output = regex.sub(rb"var\s+([^=]+)\s*=", rb"XXX \1 =", text)
+            output = _RE_FAKE_ARRAY_VAR_REPLACE.sub(rb"XXX \1 =", text)
             for varname, array, pos in replacements:
                 try:
-                    value = regex.split(rb"\s*,\s*", array)[int(pos)]
+                    value = _RE_COMMA_SEP.split(array)[int(pos)]
                 except IndexError:
                     break
                 output = output.replace(varname, value)
@@ -154,7 +177,7 @@ class DeobfuScripter(ServiceBase):
         """Replace arrays of strings with the combined string."""
         # noinspection PyBroadException
         try:
-            replacements = regex.findall(rb"var\s+([^\s=]+)\s*=\s*\[([^\]]+)\]\s*;", text)
+            replacements = _RE_ARRAY_OF_STRINGS.findall(text)
             if len(replacements) > 0:
                 #    ,- Make sure we do not process these again
                 output = text
@@ -178,11 +201,11 @@ class DeobfuScripter(ServiceBase):
     @staticmethod
     def powershell_vars(text: bytes) -> bytes:
         """Replace PowerShell variables with their values."""
-        replacements_string = regex.findall(rb"(\$(?:\w+|{[^\}]+\}))\s*=[^=]\s*[\"\']([^\"\']+)[\"\']", text)
-        replacements_func = regex.findall(rb"(\$(?:\w+|{[^\}]+\}))\s*=\s*([^=\"\'\s$]{3,50})[\s]", text)
+        replacements_string = _RE_POWERSHELL_VAR_STRING.findall(text)
+        replacements_func = _RE_POWERSHELL_VAR_FUNCTION.findall(text)
         if replacements_string or replacements_func:
             #    ,- Make sure we do not process these again
-            output = regex.sub(rb"\$((?:\w+|{[^\}]+\}))\s*=", rb"\$--\1 =", text)
+            output = _RE_POWERSHELL_VAR_REP.sub(rb"\$--\1 =", text)
             for varname, string in replacements_string:
                 output = output.replace(varname, string)
             for varname, string in replacements_func:
@@ -197,7 +220,7 @@ class DeobfuScripter(ServiceBase):
         try:
             if b"^" in text or b"`" in text:
                 output = text
-                for full in regex.findall(rb'"[^"]+[A-Za-z0-9](\^|`)+[A-Za-z0-9][^"]+"', text):
+                for full in _RE_POWERSHELL_CARET.findall(text):
                     if isinstance(full, tuple):
                         full = full[0]
                     char_to_be_removed = b"^" if b"^" in full else b"`"
@@ -215,16 +238,11 @@ class DeobfuScripter(ServiceBase):
             output = text
             # bad, prevent false var replacements like YG="86"
             # Replace regular variables
-            replacements = regex.findall(
-                rb'^(\s*(\w+)\s*=\s*\w*\s*\+?\s(["\'])(.+)["\']\s*\+\s*vbCrLf\s*$)',
-                output,
-                regex.M,
-            )
-            if len(replacements) > 0:
-                for full, variable_name, delim, value in replacements:
-                    scripts.setdefault(variable_name, [])
-                    scripts[variable_name].append(value.replace(delim + delim, delim))
-                    output = output.replace(full, b"<deobsfuscripter:msoffice_embedded_script_string_var_assignment>")
+            replacements = _RE_MSOFFICE_VARIABLES.findall(output)
+            for full, variable_name, delim, value in replacements:
+                scripts.setdefault(variable_name, [])
+                scripts[variable_name].append(value.replace(delim + delim, delim))
+                output = output.replace(full, b"<deobsfuscripter:msoffice_embedded_script_string_var_assignment>")
 
             for script_var, script_lines in scripts.items():
                 new_script_name = b"new_script__" + script_var
@@ -245,11 +263,7 @@ class DeobfuScripter(ServiceBase):
             output = text
             # prevent false var replacements like YG="86"
             # Replace regular variables
-            replacements = regex.findall(
-                rb"^\s*((?:Const[\s]*)?(\w+)\s*=" rb'\s*((?:["][^"]+["]|[\'][^\']+[\']|[0-9]*)))[\s\r]*$',
-                output,
-                regex.MULTILINE | regex.DOTALL,
-            )
+            replacements = _RE_MSWORDMACRO_VAR.findall(output)
             if len(replacements) > 0:
                 # If one variable is defined more then once take the second definition
                 replacements = [(v[0], k, v[1]) for k, v in {i[1]: (i[0], i[2]) for i in replacements}.items()]
@@ -291,11 +305,7 @@ class DeobfuScripter(ServiceBase):
                         )
 
             # Remaining stacked strings
-            replacements = regex.findall(
-                rb'^\s*((\w+)\s*=\s*(\w+)\s*[+&]\s*((?:["][^"]+["]|[\'][^\']+[\'])))[\s\r]*$',
-                output,
-                regex.MULTILINE | regex.DOTALL,
-            )
+            replacements = _RE_MSWORD_STACKED_STRINGS.findall(output)
             replacements_vars = {x[1] for x in replacements}
             for v in replacements_vars:
                 final_val = b""
@@ -319,7 +329,7 @@ class DeobfuScripter(ServiceBase):
 
     def simple_xor_function(self, text: bytes) -> bytes:
         """Try XORing the text with potential keys found in the text."""
-        xorstrings = regex.findall(rb'(\w+\("((?:[0-9A-Fa-f][0-9A-Fa-f])+)"\s*,\s*"([^"]+)"\))', text)
+        xorstrings = _RE_XORSTRINGS.findall(text)
         option_a: list[tuple[bytes, bytes, bytes, bytes | None]] = []
         option_b: list[tuple[bytes, bytes, bytes, bytes | None]] = []
         output = text
@@ -361,8 +371,8 @@ class DeobfuScripter(ServiceBase):
     @staticmethod
     def clean_up_final_layer(text: bytes) -> bytes:
         """Remove deobfuscripter artifacts from final layer for display."""
-        output = regex.sub(rb"\r", b"", text)
-        return regex.sub(rb"<deobsfuscripter:[^>]+>\n?", b"", output)
+        output = text.replace(b"\r", b"")
+        return _RE_DEOBFUSCRIPTER_ARTIFACT.sub(b"", output)
 
     # noinspection PyBroadException
     def extract_htmlscript(self, text: bytes) -> list[bytes]:
@@ -411,14 +421,14 @@ class DeobfuScripter(ServiceBase):
         ]
         second_pass.extend(first_pass)
 
-        code_extracts = [(".*html.*", "HTML scripts extraction", self.extract_htmlscript)]
+        code_extracts = [(_RE_FILETYPE_HTML, "HTML scripts extraction", self.extract_htmlscript)]
 
         layer = request.file_contents
 
         # --- Stage 1: Script Extraction --------------------------------------------------------------------------
         extract_res = ResultSection("Extraction")
         for pattern, name, func in code_extracts:
-            if regex.match(regex.compile(pattern), request.task.file_type):
+            if pattern.match(request.task.file_type):
                 extracted_parts = func(request.file_contents)
                 layer = b"\n".join(extracted_parts).strip()
                 extract_res.add_line(name)
