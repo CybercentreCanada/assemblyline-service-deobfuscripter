@@ -6,7 +6,7 @@ import binascii
 import os
 from collections import Counter, defaultdict
 from functools import partial
-from typing import Callable, Optional
+from typing import Callable
 
 import regex
 from assemblyline.common.str_utils import safe_str
@@ -19,7 +19,7 @@ from bs4 import BeautifulSoup
 from multidecoder._version import version as multidecoder_version
 
 # Type declarations
-TechniqueList = list[tuple[str, Callable[[bytes], Optional[bytes]]]]
+TechniqueList = list[tuple[str, Callable[[bytes], bytes]]]
 
 
 def filter_iocs(
@@ -94,56 +94,51 @@ class DeobfuScripter(ServiceBase):
         return bytes([(c + k) & 0xFF for c in s])
 
     @staticmethod
-    def charcode(text: bytes) -> bytes | None:
+    def charcode(text: bytes) -> bytes:
         """Replace character codes with the corresponding characters."""
         # TODO: something to handle powershell bytes syntax
 
     @staticmethod
-    def charcode_hex(text: bytes) -> bytes | None:
+    def charcode_hex(text: bytes) -> bytes:
         """Replace hex character codes with the corresponding characters."""
-        output = regex.sub(rb"(?i)(?:\\x|%)([a-f0-9]{2})", lambda m: binascii.unhexlify(m.group(1)), text)
-        return output if output != text else None
+        return regex.sub(rb"(?i)(?:\\x|%)([a-f0-9]{2})", lambda m: binascii.unhexlify(m.group(1)), text)
 
     # TODO: find a way to prevent charcode_oct from mangling windows filepaths with sections that start with 0-7
     @staticmethod
-    def charcode_oct(text: bytes) -> bytes | None:
+    def charcode_oct(text: bytes) -> bytes:
         """Replace octal character codes with the corresponding characters."""
-        output = regex.sub(rb"\\([0-7]{1,3})", partial(DeobfuScripter.codepoint_sub, base=8), text)
-        return output if output != text else None
+        return regex.sub(rb"\\([0-7]{1,3})", partial(DeobfuScripter.codepoint_sub, base=8), text)
 
     @staticmethod
-    def charcode_unicode(text: bytes) -> bytes | None:
+    def charcode_unicode(text: bytes) -> bytes:
         """Replace unicode character codes with the corresponding utf-8 byte sequence."""
-        output = regex.sub(rb"(?i)(?:\\u|%u)([a-f0-9]{4})", DeobfuScripter.codepoint_sub, text)
-        return output if output != text else None
+        return regex.sub(rb"(?i)(?:\\u|%u)([a-f0-9]{4})", DeobfuScripter.codepoint_sub, text)
 
     @staticmethod
-    def charcode_xml(text: bytes) -> bytes | None:
+    def charcode_xml(text: bytes) -> bytes:
         """Replace XML escape sequences with the corresponding character."""
         output = regex.sub(rb"(?i)&#x([a-z0-9]{1,6});", DeobfuScripter.codepoint_sub, text)
         output = regex.sub(rb"&#([0-9]{1,7});", partial(DeobfuScripter.codepoint_sub, base=10), output)
-        return output if output != text else None
+        return output
 
     @staticmethod
-    def hex_constant(text: bytes) -> bytes | None:
+    def hex_constant(text: bytes) -> bytes:
         """Replace hexadecimal integer constants with decimal ones."""
-        output = regex.sub(rb"(?i)\b0x([a-f0-9]{1,16})\b", lambda m: str(int(m.group(1), 16)).encode("utf-8"), text)
-        return output if output != text else None
+        return regex.sub(rb"(?i)\b0x([a-f0-9]{1,16})\b", lambda m: str(int(m.group(1), 16)).encode("utf-8"), text)
 
     @staticmethod
-    def javascript_join(text: bytes) -> bytes | None:
+    def javascript_join(text: bytes) -> bytes:
         """Replace a join call on an array with the resulting string."""
         join_re = rb'\[\s*((?:"[^"\n]*"\s*,\s*)*"[^"\n]*")\s*\]\.join\("([^"\n]*)"\)'
         def join_rep(match):
             return regex.sub(rb'"\s*,\s*"', match.group(2), match.group(1))
-        output = regex.sub(join_re, join_rep, text)
-        return output if output != text else None
+        return regex.sub(join_re, join_rep, text)
 
     @staticmethod
-    def vars_of_fake_arrays(text: bytes) -> bytes | None:
+    def vars_of_fake_arrays(text: bytes) -> bytes:
         """Parse variables of fake arrays."""
         replacements = regex.findall(rb"var\s+([^\s=]+)\s*=\s*\[([^\]]+)\]\[(\d+)\]", text)
-        if len(replacements) > 0:
+        if replacements:
             #    ,- Make sure we do not process these again
             output = regex.sub(rb"var\s+([^=]+)\s*=", rb"XXX \1 =", text)
             for varname, array, pos in replacements:
@@ -152,11 +147,10 @@ class DeobfuScripter(ServiceBase):
                 except IndexError:
                     break
                 output = output.replace(varname, value)
-            if output != text:
-                return output
-        return None
+            return output
+        return text
 
-    def array_of_strings(self, text: bytes) -> bytes | None:
+    def array_of_strings(self, text: bytes) -> bytes:
         """Replace arrays of strings with the combined string."""
         # noinspection PyBroadException
         try:
@@ -175,32 +169,30 @@ class DeobfuScripter(ServiceBase):
                             )
                         except IndexError:
                             break
-                if output != text:
-                    return output
+                return output
         except Exception as e:
             self.log.warning(f"Technique array_of_strings failed with error: {e!s}")
 
-        return None
+        return text
 
     @staticmethod
-    def powershell_vars(text: bytes) -> bytes | None:
+    def powershell_vars(text: bytes) -> bytes:
         """Replace PowerShell variables with their values."""
         replacements_string = regex.findall(rb"(\$(?:\w+|{[^\}]+\}))\s*=[^=]\s*[\"\']([^\"\']+)[\"\']", text)
         replacements_func = regex.findall(rb"(\$(?:\w+|{[^\}]+\}))\s*=\s*([^=\"\'\s$]{3,50})[\s]", text)
-        if len(replacements_string) > 0 or len(replacements_func) > 0:
+        if replacements_string or replacements_func:
             #    ,- Make sure we do not process these again
             output = regex.sub(rb"\$((?:\w+|{[^\}]+\}))\s*=", rb"\$--\1 =", text)
             for varname, string in replacements_string:
                 output = output.replace(varname, string)
             for varname, string in replacements_func:
                 output = output.replace(varname, string)
-            if output != text:
-                return output
+            return output
 
-        return None
+        return text
 
     @staticmethod
-    def powershell_carets(text: bytes) -> bytes | None:
+    def powershell_carets(text: bytes) -> bytes:
         """Remove PowerShell carets."""
         try:
             if b"^" in text or b"`" in text:
@@ -210,15 +202,13 @@ class DeobfuScripter(ServiceBase):
                         full = full[0]
                     char_to_be_removed = b"^" if b"^" in full else b"`"
                     output = output.replace(full, full.replace(char_to_be_removed, b""))
-                if output == text:
-                    return None
                 return output
         except TimeoutError:
             pass
-        return None
+        return text
 
     # noinspection PyBroadException
-    def msoffice_embedded_script_string(self, text: bytes) -> bytes | None:
+    def msoffice_embedded_script_string(self, text: bytes) -> bytes:
         """Replace variables with their values in MSOffice embedded scripts."""
         try:
             scripts: dict[bytes, list[bytes]] = {}
@@ -242,15 +232,13 @@ class DeobfuScripter(ServiceBase):
                 output += b"\n\n\n' ---- script referenced by \"" + new_script_name + b'" ----\n\n\n'
                 output += b"\n".join(script_lines)
 
-            if output == text:
-                return None
             return output
 
         except Exception as e:
             self.log.warning(f"Technique msoffice_embedded_script_string failed with error: {e!s}")
-            return None
+            return text
 
-    def mswordmacro_vars(self, text: bytes) -> bytes | None:
+    def mswordmacro_vars(self, text: bytes) -> bytes:
         """Replace Microsoft Word variables with their values."""
         # noinspection PyBroadException
         try:
@@ -323,15 +311,13 @@ class DeobfuScripter(ServiceBase):
                     count=5,
                 )
 
-            if output == text:
-                return None
             return output
 
         except Exception as e:
             self.log.warning(f"Technique mswordmacro_vars failed with error: {e!s}")
-            return None
+            return text
 
-    def simple_xor_function(self, text: bytes) -> bytes | None:
+    def simple_xor_function(self, text: bytes) -> bytes:
         """Try XORing the text with potential keys found in the text."""
         xorstrings = regex.findall(rb'(\w+\("((?:[0-9A-Fa-f][0-9A-Fa-f])+)"\s*,\s*"([^"]+)"\))', text)
         option_a: list[tuple[bytes, bytes, bytes, bytes | None]] = []
@@ -360,8 +346,6 @@ class DeobfuScripter(ServiceBase):
             if r is not None:
                 output = output.replace(f, b'"' + r + b'"')
 
-        if output == text:
-            return None
         return output
 
     @staticmethod
@@ -602,7 +586,7 @@ class DeobfuScripter(ServiceBase):
         # DeobfuScripter specific techniques
         for name, technique in techniques:
             result = technique(layer)
-            if result:
+            if result != layer:
                 techniques_used.add(name)
                 # Looks like it worked, continue with the new layer
                 layer = result
