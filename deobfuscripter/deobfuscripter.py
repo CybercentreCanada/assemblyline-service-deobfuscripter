@@ -132,6 +132,15 @@ class DeobfuScripter(ServiceBase):
         return output if output != text else None
 
     @staticmethod
+    def javascript_join(text: bytes) -> bytes | None:
+        """Replace a join call on an array with the resulting string."""
+        join_re = rb'\[\s*((?:"[^"\n]*"\s*,\s*)*"[^"\n]*")\s*\]\.join\("([^"\n]*)"\)'
+        def join_rep(match):
+            return regex.sub(rb'"\s*,\s*"', match.group(2), match.group(1))
+        output = regex.sub(join_re, join_rep, text)
+        return output if output != text else None
+
+    @staticmethod
     def vars_of_fake_arrays(text: bytes) -> bytes | None:
         """Parse variables of fake arrays."""
         replacements = regex.findall(rb"var\s+([^\s=]+)\s*=\s*\[([^\]]+)\]\[(\d+)\]", text)
@@ -403,6 +412,7 @@ class DeobfuScripter(ServiceBase):
         first_pass: TechniqueList = [
             ("MSOffice Embedded script", self.msoffice_embedded_script_string),
             ("Powershell carets", self.powershell_carets),
+            ("Array join", self.javascript_join),
             ("Array of strings", self.array_of_strings),
             ("Fake array vars", self.vars_of_fake_arrays),
             ("Simple XOR function", self.simple_xor_function),
