@@ -21,6 +21,8 @@ from multidecoder._version import version as multidecoder_version
 # Type declarations
 TechniqueList = list[tuple[str, Callable[[bytes], bytes]]]
 
+BINCHARS = bytes(set(range(256))-set(range(0x20, 127)))
+
 # Regexes
 _RE_CHARCODE_HEX = regex.compile(rb"(?i)(?:\\x|%)([a-f0-9]{2})")
 _RE_CHARCODE_OCT = regex.compile(rb"\\([0-7]{1,3})")
@@ -72,10 +74,50 @@ def filter_iocs(
     return new_iocs
 
 
+def printable_ratio(self, text: bytes) -> float:
+    """Calcuate the ratio of printable characters to total characters in text."""
+    return len(text.translate(None, BINCHARS)) / len(text)
+
+
+def encode_codepoint(codepoint: int) -> bytes:
+    """Get the encoding from unicode codepoint."""
+    return chr(codepoint).encode("utf-8")
+
+
+def codepoint_sub(match: regex.Match[bytes], base: int = 16) -> bytes:
+    """Replace method for unicode codepoint regex substitutions.
+
+    Args:
+        match: The regex match object with the text of the unicode codepoint value as group 1.
+        base: The base that the unicode codepoint is represented in (defaults to hexadecimal)
+
+    Returns:
+        - The utf-8 byte sequence for the codepoint if it can be decoded.
+        - The original match text if there is a decoding error.
+    """
+    try:
+        return encode_codepoint(int(match.group(1), base))
+    except ValueError:
+        return match.group(0)  # No replacement if decoding fails
+
+
+def add1b(s: bytes, k: int) -> bytes:
+    """Add k to each byte of s."""
+    return bytes([(c + k) & 0xFF for c in s])
+
+
+def xor_with_key(s: bytes, k: bytes) -> bytes:
+    """XOR s using the key k."""
+    return bytes([a ^ b for a, b in zip(s, (len(s) // len(k) + 1) * k)])
+
+
+def zp_xor_with_key(s: bytes, k: bytes) -> bytes:
+    """XOR variant where xoring is skipped for 0 bytes and when the byte is equal to the keybyte."""
+    return bytes([a if a in (0, b) else a ^ b for a, b in zip(s, (len(s) // len(k) + 1) * k)])
+
+
 class DeobfuScripter(ServiceBase):
     """Service for deobfuscating scripts."""
-
-    BINCHARS = bytes(set(range(256))-set(range(0x20, 127)))
 
     def __init__(self, config: dict | None = None) -> None:
         super().__init__(config)
@@ -84,38 +126,7 @@ class DeobfuScripter(ServiceBase):
         """Returns the version of Multidecoder used by the service."""
         return f"Multidecoder: {multidecoder_version}"
 
-    # --- Support Modules ----------------------------------------------------------------------------------------------
-
-    def printable_ratio(self, text: bytes) -> float:
-        """Calcuate the ratio of printable characters to total characters in text."""
-        return len(text.translate(None, self.BINCHARS)) / len(text)
-
-    @staticmethod
-    def encode_codepoint(codepoint: int) -> bytes:
-        """Get the encoding from unicode codepoint."""
-        return chr(codepoint).encode("utf-8")
-
-    @staticmethod
-    def codepoint_sub(match: regex.Match[bytes], base: int = 16) -> bytes:
-        """Replace method for unicode codepoint regex substitutions.
-
-        Args:
-            match: The regex match object with the text of the unicode codepoint value as group 1.
-            base: The base that the unicode codepoint is represented in (defaults to hexadecimal)
-
-        Returns:
-            - The utf-8 byte sequence for the codepoint if it can be decoded.
-            - The original match text if there is a decoding error.
-        """
-        try:
-            return DeobfuScripter.encode_codepoint(int(match.group(1), base))
-        except ValueError:
-            return match.group(0)  # No replacement if decoding fails
-
-    @staticmethod
-    def add1b(s: bytes, k: int) -> bytes:
-        """Add k to each byte of s."""
-        return bytes([(c + k) & 0xFF for c in s])
+    # --- Techniques ----------------------------------------------------------------------------------------------
 
     @staticmethod
     def charcode(text: bytes) -> bytes:
@@ -131,18 +142,18 @@ class DeobfuScripter(ServiceBase):
     @staticmethod
     def charcode_oct(text: bytes) -> bytes:
         """Replace octal character codes with the corresponding characters."""
-        return _RE_CHARCODE_OCT.sub(partial(DeobfuScripter.codepoint_sub, base=8), text)
+        return _RE_CHARCODE_OCT.sub(partial(codepoint_sub, base=8), text)
 
     @staticmethod
     def charcode_unicode(text: bytes) -> bytes:
         """Replace unicode character codes with the corresponding utf-8 byte sequence."""
-        return _RE_CHARCODE_UNICODE.sub(DeobfuScripter.codepoint_sub, text)
+        return _RE_CHARCODE_UNICODE.sub(codepoint_sub, text)
 
     @staticmethod
     def charcode_xml(text: bytes) -> bytes:
         """Replace XML escape sequences with the corresponding character."""
-        output = _RE_CHARCODE_XML_HEX.sub(DeobfuScripter.codepoint_sub, text)
-        output = _RE_CHARCODE_XML.sub(partial(DeobfuScripter.codepoint_sub, base=10), output)
+        output = _RE_CHARCODE_XML_HEX.sub(codepoint_sub, text)
+        output = _RE_CHARCODE_XML.sub(partial(codepoint_sub, base=10), output)
         return output
 
     @staticmethod
@@ -334,14 +345,14 @@ class DeobfuScripter(ServiceBase):
         option_b: list[tuple[bytes, bytes, bytes, bytes | None]] = []
         output = text
         for f, x, k in xorstrings:
-            res = self.xor_with_key(binascii.a2b_hex(x), k)
-            if self.printable_ratio(res) == 1:
+            res = xor_with_key(binascii.a2b_hex(x), k)
+            if printable_ratio(res) == 1:
                 option_a.append((f, x, k, res))
             else:
                 option_a.append((f, x, k, None))
             # try by shifting the key by 1
-            res = self.xor_with_key(binascii.a2b_hex(x), k[1:] + k[0:1])
-            if self.printable_ratio(res) == 1:
+            res = xor_with_key(binascii.a2b_hex(x), k[1:] + k[0:1])
+            if printable_ratio(res) == 1:
                 option_b.append((f, x, k, res))
             else:
                 option_b.append((f, x, k, None))
@@ -358,15 +369,7 @@ class DeobfuScripter(ServiceBase):
 
         return output
 
-    @staticmethod
-    def xor_with_key(s: bytes, k: bytes) -> bytes:
-        """XOR s using the key k."""
-        return bytes([a ^ b for a, b in zip(s, (len(s) // len(k) + 1) * k)])
-
-    @staticmethod
-    def zp_xor_with_key(s: bytes, k: bytes) -> bytes:
-        """XOR variant where xoring is skipped for 0 bytes and when the byte is equal to the keybyte."""
-        return bytes([a if a in (0, b) else a ^ b for a, b in zip(s, (len(s) // len(k) + 1) * k)])
+    # --- Supporting methods --------------------------------------------------------------------------------------
 
     @staticmethod
     def clean_up_final_layer(text: bytes) -> bytes:
