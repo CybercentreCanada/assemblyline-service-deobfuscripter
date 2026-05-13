@@ -32,12 +32,12 @@ TechniqueList = list[tuple[str, Callable[[bytes], bytes]]]
 BINCHARS = bytes(set(range(256)) - set(range(0x20, 127)))
 
 # Regexes
-_RE_CHARCODE_HEX = regex.compile(rb"(?:\\x|%)([A-Fa-f0-9]{2})")
+_RE_CHARCODE_HEX = regex.compile(rb"(?:\\x|%)([0-9A-Fa-f]{2})")
 _RE_CHARCODE_OCT = regex.compile(rb"\\([0-7]{1,3})")
-_RE_CHARCODE_UNICODE = regex.compile(rb"(?i)(?:\\u|%u)([a-f0-9]{4})")
-_RE_CHARCODE_XML_HEX = regex.compile(rb"(?i)&#x([a-z0-9]{1,6});")
+_RE_CHARCODE_UNICODE = regex.compile(rb"(?i)[\\%]u([0-9a-f]{4})")
+_RE_CHARCODE_XML_HEX = regex.compile(rb"&#x([0-9A-Fa-f]{1,6});")
 _RE_CHARCODE_XML = regex.compile(rb"&#([0-9]{1,7});")
-_RE_HEX_CONSTANT = regex.compile(rb"(?i)\b0x([a-f0-9]{1,16})\b")
+_RE_HEX_CONSTANT = regex.compile(rb"(?i)\b0x([0-9a-f]{1,16})\b")
 _RE_JS_JOIN = regex.compile(rb'\[\s*((?:"[^"\n]*"\s*,\s*)*"[^"\n]*")\s*\]\.join\("([^"\n]*)"\)')
 _RE_QUOTE_COMMA_SEP = regex.compile(rb'"\s*,\s*"')
 _RE_VAR_OF_FAKE_ARRAYS = regex.compile(rb"var\s+([^\s=]+)\s*=\s*\[([^\]]+)\]\[(\d+)\]")
