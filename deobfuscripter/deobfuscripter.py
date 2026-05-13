@@ -32,7 +32,7 @@ TechniqueList = list[tuple[str, Callable[[bytes], bytes]]]
 BINCHARS = bytes(set(range(256)) - set(range(0x20, 127)))
 
 # Regexes
-_RE_CHARCODE_HEX = regex.compile(rb"(?i)(?:\\x|%)([a-f0-9]{2})")
+_RE_CHARCODE_HEX = regex.compile(rb"(?:\\x|%)([A-Fa-f0-9]{2})")
 _RE_CHARCODE_OCT = regex.compile(rb"\\([0-7]{1,3})")
 _RE_CHARCODE_UNICODE = regex.compile(rb"(?i)(?:\\u|%u)([a-f0-9]{4})")
 _RE_CHARCODE_XML_HEX = regex.compile(rb"(?i)&#x([a-z0-9]{1,6});")
@@ -167,6 +167,8 @@ class DeobfuScripter(ServiceBase):
     @staticmethod
     def charcode_xml(text: bytes) -> bytes:
         """Replace XML escape sequences with the corresponding character."""
+        if b'&#' not in text:
+            return text
         output = _RE_CHARCODE_XML_HEX.sub(codepoint_sub, text)
         output = _RE_CHARCODE_XML.sub(partial(codepoint_sub, base=10), output)
         return output
@@ -174,12 +176,15 @@ class DeobfuScripter(ServiceBase):
     @staticmethod
     def hex_constant(text: bytes) -> bytes:
         """Replace hexadecimal integer constants with decimal ones."""
+        if b'0x' not in text and b'0X' not in text:
+            return text
         return _RE_HEX_CONSTANT.sub(lambda m: str(int(m.group(1), 16)).encode("utf-8"), text)
 
     @staticmethod
     def javascript_join(text: bytes) -> bytes:
         """Replace a join call on an array with the resulting string."""
-
+        if b'].join(' not in text:
+            return text
         def join_rep(match):
             return _RE_QUOTE_COMMA_SEP.sub(match.group(2), match.group(1))
 
@@ -206,7 +211,7 @@ class DeobfuScripter(ServiceBase):
         # noinspection PyBroadException
         try:
             replacements = _RE_ARRAY_OF_STRINGS.findall(text)
-            if len(replacements) > 0:
+            if replacements:
                 #    ,- Make sure we do not process these again
                 output = text
                 for varname, values in replacements:
