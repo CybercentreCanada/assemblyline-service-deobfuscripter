@@ -52,7 +52,7 @@ _RE_MSOFFICE_VARIABLES = regex.compile(
     rb'^(\s*(\w+)\s*=\s*\w*\s*\+?\s(["\'])(.+)["\']\s*\+\s*vbCrLf\s*$)', flags=regex.M
 )
 _RE_MSWORDMACRO_VAR = regex.compile(
-    rb"^\s*((?:Const[\s]*)?(\w+)\s*=" rb'\s*((?:["][^"]+["]|[\'][^\']+[\']|[0-9]*)))[\s\r]*$',
+    rb'^\s*((?:Const[\s]*)?(\w+)\s*=\s*((?:["][^"]+["]|[\'][^\']+[\']|[0-9]*)))[\s\r]*$',
     flags=regex.MULTILINE | regex.DOTALL,
 )
 _RE_MSWORD_STACKED_STRINGS = regex.compile(
@@ -193,6 +193,8 @@ class DeobfuScripter(ServiceBase):
     @staticmethod
     def vars_of_fake_arrays(text: bytes) -> bytes:
         """Parse variables of fake arrays."""
+        if b'var' not in text:
+            return text
         replacements = _RE_VAR_OF_FAKE_ARRAYS.findall(text)
         if replacements:
             #    ,- Make sure we do not process these again
@@ -209,6 +211,8 @@ class DeobfuScripter(ServiceBase):
     def array_of_strings(self, text: bytes) -> bytes:
         """Replace arrays of strings with the combined string."""
         # noinspection PyBroadException
+        if b'var' not in text:
+            return text
         try:
             replacements = _RE_ARRAY_OF_STRINGS.findall(text)
             if replacements:
@@ -266,6 +270,8 @@ class DeobfuScripter(ServiceBase):
     # noinspection PyBroadException
     def msoffice_embedded_script_string(self, text: bytes) -> bytes:
         """Replace variables with their values in MSOffice embedded scripts."""
+        if b'vbCrLf' not in text:
+            return text
         try:
             scripts: dict[bytes, list[bytes]] = {}
             output = text
