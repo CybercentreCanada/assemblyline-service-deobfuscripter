@@ -167,7 +167,7 @@ class DeobfuScripter(ServiceBase):
     @staticmethod
     def charcode_xml(text: bytes) -> bytes:
         """Replace XML escape sequences with the corresponding character."""
-        if b'&#' not in text:
+        if b"&#" not in text:
             return text
         output = _RE_CHARCODE_XML_HEX.sub(codepoint_sub, text)
         output = _RE_CHARCODE_XML.sub(partial(codepoint_sub, base=10), output)
@@ -176,15 +176,16 @@ class DeobfuScripter(ServiceBase):
     @staticmethod
     def hex_constant(text: bytes) -> bytes:
         """Replace hexadecimal integer constants with decimal ones."""
-        if b'0x' not in text and b'0X' not in text:
+        if b"0x" not in text and b"0X" not in text:
             return text
         return _RE_HEX_CONSTANT.sub(lambda m: str(int(m.group(1), 16)).encode("utf-8"), text)
 
     @staticmethod
     def javascript_join(text: bytes) -> bytes:
         """Replace a join call on an array with the resulting string."""
-        if b'].join(' not in text:
+        if b"].join(" not in text:
             return text
+
         def join_rep(match):
             return _RE_QUOTE_COMMA_SEP.sub(match.group(2), match.group(1))
 
@@ -193,7 +194,7 @@ class DeobfuScripter(ServiceBase):
     @staticmethod
     def vars_of_fake_arrays(text: bytes) -> bytes:
         """Parse variables of fake arrays."""
-        if b'var' not in text:
+        if b"var" not in text:
             return text
         replacements = _RE_VAR_OF_FAKE_ARRAYS.findall(text)
         if replacements:
@@ -211,7 +212,7 @@ class DeobfuScripter(ServiceBase):
     def array_of_strings(self, text: bytes) -> bytes:
         """Replace arrays of strings with the combined string."""
         # noinspection PyBroadException
-        if b'var' not in text:
+        if b"var" not in text:
             return text
         try:
             replacements = _RE_ARRAY_OF_STRINGS.findall(text)
@@ -270,7 +271,7 @@ class DeobfuScripter(ServiceBase):
     # noinspection PyBroadException
     def msoffice_embedded_script_string(self, text: bytes) -> bytes:
         """Replace variables with their values in MSOffice embedded scripts."""
-        if b'vbCrLf' not in text:
+        if b"vbCrLf" not in text:
             return text
         try:
             scripts: dict[bytes, list[bytes]] = {}
