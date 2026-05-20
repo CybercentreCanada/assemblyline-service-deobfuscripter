@@ -89,7 +89,7 @@ def filter_iocs(
     return new_iocs
 
 
-def printable_ratio(self, text: bytes) -> float:
+def printable_ratio(text: bytes) -> float:
     """Calcuate the ratio of printable characters to total characters in text."""
     return len(text.translate(None, BINCHARS)) / len(text)
 
@@ -367,7 +367,8 @@ class DeobfuScripter(ServiceBase):
             self.log.warning(f"Technique mswordmacro_vars failed with error: {e!s}")
             return text
 
-    def simple_xor_function(self, text: bytes) -> bytes:
+    @staticmethod
+    def simple_xor_function(text: bytes) -> bytes:
         """Try XORing the text with potential keys found in the text."""
         xorstrings = _RE_XORSTRINGS.findall(text)
         option_a: list[tuple[bytes, bytes, bytes, bytes | None]] = []
