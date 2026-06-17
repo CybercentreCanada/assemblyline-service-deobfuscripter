@@ -33,7 +33,10 @@ BINCHARS = bytes(set(range(256)) - set(range(0x20, 127)))
 
 # Regexes
 _RE_CHARCODE_HEX = regex.compile(rb"(?:\\x|%)([0-9A-Fa-f]{2})")
-_RE_CHARCODE_OCT = regex.compile(rb"\\([0-7]{1,3})")
+# Technically OCT and LUA_DEC both can take less than 3 numbers, but it's less common
+# Restricting to 3 avoids manglingwindows file paths that start with a digit
+_RE_CHARCODE_OCT = regex.compile(rb"\\([0-7]{3})")
+_RE_CHARCODE_LUA_DEC = regex.compile(rb"\\(\d{3})")
 _RE_CHARCODE_UNICODE = regex.compile(rb"(?i)[\\%]u([0-9a-f]{4})")
 _RE_CHARCODE_XML_HEX = regex.compile(rb"&#x([0-9A-Fa-f]{1,6});")
 _RE_CHARCODE_XML = regex.compile(rb"&#([0-9]{1,7});")
@@ -56,7 +59,8 @@ _RE_MSWORDMACRO_VAR = regex.compile(
     flags=regex.MULTILINE | regex.DOTALL,
 )
 _RE_MSWORD_STACKED_STRINGS = regex.compile(
-    rb'^\s*((\w+)\s*=\s*(\w+)\s*[+&]\s*((?:["][^"]+["]|[\'][^\']+[\'])))[\s\r]*$', regex.MULTILINE | regex.DOTALL
+    rb'^\s*((\w+)\s*=\s*(\w+)\s*[+&]\s*((?:["][^"]+["]|[\'][^\']+[\'])))[\s\r]*$',
+    regex.MULTILINE | regex.DOTALL,
 )
 _RE_XORSTRINGS = regex.compile(rb'(\w+\("((?:[0-9A-Fa-f][0-9A-Fa-f])+)"\s*,\s*"([^"]+)"\))')
 _RE_DEOBFUSCRIPTER_ARTIFACT = regex.compile(rb"<deobsfuscripter:[^>]+>\n?")
@@ -153,11 +157,15 @@ class DeobfuScripter(ServiceBase):
         """Replace hex character codes with the corresponding characters."""
         return _RE_CHARCODE_HEX.sub(lambda m: binascii.unhexlify(m.group(1)), text)
 
-    # TODO: find a way to prevent charcode_oct from mangling windows filepaths with sections that start with 0-7
     @staticmethod
     def charcode_oct(text: bytes) -> bytes:
         """Replace octal character codes with the corresponding characters."""
         return _RE_CHARCODE_OCT.sub(partial(codepoint_sub, base=8), text)
+
+    @staticmethod
+    def charcode_lua_dec(text: bytes) -> bytes:
+        """Replace Lua decimal character codes with the corresponding characters."""
+        return _RE_CHARCODE_LUA_DEC.sub(partial(codepoint_sub, base=10), text)
 
     @staticmethod
     def charcode_unicode(text: bytes) -> bytes:
@@ -282,7 +290,10 @@ class DeobfuScripter(ServiceBase):
             for full, variable_name, delim, value in replacements:
                 scripts.setdefault(variable_name, [])
                 scripts[variable_name].append(value.replace(delim + delim, delim))
-                output = output.replace(full, b"<deobsfuscripter:msoffice_embedded_script_string_var_assignment>")
+                output = output.replace(
+                    full,
+                    b"<deobsfuscripter:msoffice_embedded_script_string_var_assignment>",
+                )
 
             for script_var, script_lines in scripts.items():
                 new_script_name = b"new_script__" + script_var
@@ -310,7 +321,10 @@ class DeobfuScripter(ServiceBase):
                 for full, varname, value in replacements:
                     if len(regex.findall(rb"\b" + varname + rb"\b", output)) == 1:
                         # If there is only one instance of these, it's probably noise.
-                        output = output.replace(full, b"<deobsfuscripter:mswordmacro_unused_variable_assignment>")
+                        output = output.replace(
+                            full,
+                            b"<deobsfuscripter:mswordmacro_unused_variable_assignment>",
+                        )
                     else:
                         final_val = value.replace(b'"', b"")
                         # Stacked strings
@@ -329,7 +343,10 @@ class DeobfuScripter(ServiceBase):
                         if len(stacked) > 0:
                             for sfull, val in stacked:
                                 final_val += val.replace(b'"', b"")
-                                output = output.replace(sfull, b"<deobsfuscripter:mswordmacro_var_assignment>")
+                                output = output.replace(
+                                    sfull,
+                                    b"<deobsfuscripter:mswordmacro_var_assignment>",
+                                )
                         output = output.replace(full, b"<deobsfuscripter:mswordmacro_var_assignment>")
                         # If more than a of the variable name left, the assumption is that this did not
                         # work according to plan, so just replace a few for now.
@@ -447,7 +464,11 @@ class DeobfuScripter(ServiceBase):
             ("MSWord macro vars", self.mswordmacro_vars),
             ("Powershell vars", self.powershell_vars),
             ("Hex Charcodes", self.charcode_hex),
-            # ('Octal Charcodes', self.charcode_oct),
+            (
+                ("Lua Decimal Charcodes", self.charcode_lua_dec)
+                if request.file_type == "code/lua"
+                else ("Octal Charcodes", self.charcode_oct)
+            ),
             ("Unicode Charcodes", self.charcode_unicode),
             ("XML Charcodes", self.charcode_xml),
             ("Hex Int Constants", self.hex_constant),
