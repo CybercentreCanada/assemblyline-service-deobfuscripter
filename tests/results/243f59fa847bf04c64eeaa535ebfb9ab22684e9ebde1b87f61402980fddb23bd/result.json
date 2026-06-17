@@ -43,7 +43,7 @@
       },
       {
         "auto_collapse": false,
-        "body": "New IOCs found in pass 1:\nFound NETWORK STATIC DOMAIN: rhcsa.linux-shared-pkgs.de",
+        "body": "New IOCs found in pass 1:\nFound FILE STRING BLACKLISTED: Host:\nFound FILE STRING BLACKLISTED: Mozilla/4.0\nFound FILE STRING BLACKLISTED: User-Agent:\nFound FILE STRING BLACKLISTED: Windows NT\nFound NETWORK STATIC DOMAIN: rhcsa.linux-shared-pkgs.de",
         "body_config": {},
         "body_format": "MEMORY_DUMP",
         "classification": "TLP:C",
@@ -58,6 +58,16 @@
         },
         "promote_to": null,
         "tags": {
+          "file": {
+            "string": {
+              "blacklisted": [
+                "Host:",
+                "Mozilla/4.0",
+                "User-Agent:",
+                "Windows NT"
+              ]
+            }
+          },
           "network": {
             "static": {
               "domain": [
@@ -99,6 +109,28 @@
       }
     ],
     "tags": {
+      "file.string.blacklisted": [
+        {
+          "heur_id": 6,
+          "signatures": [],
+          "value": "Host:"
+        },
+        {
+          "heur_id": 6,
+          "signatures": [],
+          "value": "Mozilla/4.0"
+        },
+        {
+          "heur_id": 6,
+          "signatures": [],
+          "value": "User-Agent:"
+        },
+        {
+          "heur_id": 6,
+          "signatures": [],
+          "value": "Windows NT"
+        }
+      ],
       "network.static.domain": [
         {
           "heur_id": 6,
