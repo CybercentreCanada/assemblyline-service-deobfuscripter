@@ -1,0 +1,212 @@
+{
+  "extra": {
+    "drop_file": false,
+    "score": 180,
+    "sections": [
+      {
+        "auto_collapse": false,
+        "body": "Hex Charcodes, 2 time(s).\nHex Int Constants, 1 time(s).\nLua Decimal Charcodes, 1 time(s).\nPowershell carets, 1 time(s).\nconcatenation, 1 time(s).\nencoding.base64, 2 time(s).",
+        "body_config": {},
+        "body_format": "TEXT",
+        "classification": "TLP:C",
+        "depth": 0,
+        "heuristic": {
+          "attack_ids": [],
+          "frequency": 1,
+          "heur_id": 1,
+          "score": 80,
+          "score_map": {},
+          "signatures": {
+            "Hex Charcodes": 2,
+            "Hex Int Constants": 1,
+            "Lua Decimal Charcodes": 1,
+            "Powershell carets": 1,
+            "concatenation": 1,
+            "encoding.base64": 2
+          }
+        },
+        "promote_to": null,
+        "tags": {},
+        "title_text": "De-obfuscation steps taken by DeobsfuScripter",
+        "zeroize_on_tag_safe": false
+      },
+      {
+        "auto_collapse": false,
+        "body": "local UHGQIDF = \"~~~~~~~~~~~~~~~~~~ww>FMLJ47:#47:nvuQ:Rg<:v:IM~yy~2Q<*TYGKOR<~To~KSF#l00iEUSVLOMX@zS#++~~++~7rLUQEY307gQ<*TYGK6Q<STIEKSF#l00iEUSRLOMYIUSRLq68IUSfLiF:l00iIUSRKO8XgVv<@o+gH5~i4wgi4z#El03iYNR<SXI8LeF@lU0iMUSVLO8XGvY52@>h&p1///PsoHXNNyQJ19////PvojQJ19/R2TzV:H~4:qQiHgew~wQjfJwi~~~~HwwRH*Qi@IUj#kY~2+g:LOh<JXI:Hl4/#1I#X1I:PtI#lU3iXNMFEPIX#voXVzyXg9//+vJhPs<hYUSVJ&PNUUSTJK0Q#gY~KiRJVtIFl00iYs+R2T:GlUVi1*X~uPoQ:J~i@o4zso8iTUn9F#PRPIQ>N#~~~~4/@G8QP~~~F~w/@GgQNiRJVtoQ@MH~~4H~/HIyLqF~~~wpojR",
+        "body_config": {},
+        "body_format": "MEMORY_DUMP",
+        "classification": "TLP:C",
+        "depth": 0,
+        "heuristic": null,
+        "promote_to": null,
+        "tags": {},
+        "title_text": "First 500 bytes of the final layer:",
+        "zeroize_on_tag_safe": false
+      },
+      {
+        "auto_collapse": false,
+        "body": "New IOCs found in pass 3:\nFound FILE STRING API: CreateRemoteThread\nFound FILE STRING API: EtwEventEnabled\nFound FILE STRING API: EtwEventWrite\nFound FILE STRING API: GetCurrentProcessId\nFound FILE STRING API: GetDesktopWindow\nFound FILE STRING API: GetForegroundWindow\nFound FILE STRING API: NtCreateSection\nFound FILE STRING API: NtQueryVirtualMemory\nFound FILE STRING API: NtSuspendProcess\nFound FILE STRING API: NtTerminateProcess\nFound FILE STRING API: RtlCompareMemory\nFound FILE STRING API: VirtualProtect\nFound FILE STRING API: memset\nFound FILE NAME EXTRACTED: clr.dll\nFound FILE NAME EXTRACTED: kernel32.dll\nFound FILE NAME EXTRACTED: ntdll.dll",
+        "body_config": {},
+        "body_format": "MEMORY_DUMP",
+        "classification": "TLP:C",
+        "depth": 0,
+        "heuristic": {
+          "attack_ids": [],
+          "frequency": 1,
+          "heur_id": 6,
+          "score": 100,
+          "score_map": {},
+          "signatures": {}
+        },
+        "promote_to": null,
+        "tags": {
+          "file": {
+            "name": {
+              "extracted": [
+                "clr.dll",
+                "kernel32.dll",
+                "ntdll.dll"
+              ]
+            },
+            "string": {
+              "api": [
+                "CreateRemoteThread",
+                "EtwEventEnabled",
+                "EtwEventWrite",
+                "GetCurrentProcessId",
+                "GetDesktopWindow",
+                "GetForegroundWindow",
+                "NtCreateSection",
+                "NtQueryVirtualMemory",
+                "NtSuspendProcess",
+                "NtTerminateProcess",
+                "RtlCompareMemory",
+                "VirtualProtect",
+                "memset"
+              ]
+            }
+          }
+        },
+        "title_text": "New IOCs found after de-obfustcation",
+        "zeroize_on_tag_safe": false
+      }
+    ]
+  },
+  "files": {
+    "extracted": [],
+    "supplementary": [
+      {
+        "name": "eca5a52fdf2e4fdb6add96d502b02d1a07db15b2b2d7a01a235c189cf3d11cf1_decoded_final",
+        "sha256": "b4cc4949f51c48830d8619c81cbc97ad1a18318c5c53d998a3694f20acf63be7"
+      }
+    ]
+  },
+  "results": {
+    "heuristics": [
+      {
+        "attack_ids": [],
+        "heur_id": 1,
+        "signatures": [
+          "Hex Charcodes",
+          "Hex Int Constants",
+          "Lua Decimal Charcodes",
+          "Powershell carets",
+          "concatenation",
+          "encoding.base64"
+        ]
+      },
+      {
+        "attack_ids": [],
+        "heur_id": 6,
+        "signatures": []
+      }
+    ],
+    "tags": {
+      "file.name.extracted": [
+        {
+          "heur_id": 6,
+          "signatures": [],
+          "value": "clr.dll"
+        },
+        {
+          "heur_id": 6,
+          "signatures": [],
+          "value": "kernel32.dll"
+        },
+        {
+          "heur_id": 6,
+          "signatures": [],
+          "value": "ntdll.dll"
+        }
+      ],
+      "file.string.api": [
+        {
+          "heur_id": 6,
+          "signatures": [],
+          "value": "CreateRemoteThread"
+        },
+        {
+          "heur_id": 6,
+          "signatures": [],
+          "value": "EtwEventEnabled"
+        },
+        {
+          "heur_id": 6,
+          "signatures": [],
+          "value": "EtwEventWrite"
+        },
+        {
+          "heur_id": 6,
+          "signatures": [],
+          "value": "GetCurrentProcessId"
+        },
+        {
+          "heur_id": 6,
+          "signatures": [],
+          "value": "GetDesktopWindow"
+        },
+        {
+          "heur_id": 6,
+          "signatures": [],
+          "value": "GetForegroundWindow"
+        },
+        {
+          "heur_id": 6,
+          "signatures": [],
+          "value": "NtCreateSection"
+        },
+        {
+          "heur_id": 6,
+          "signatures": [],
+          "value": "NtQueryVirtualMemory"
+        },
+        {
+          "heur_id": 6,
+          "signatures": [],
+          "value": "NtSuspendProcess"
+        },
+        {
+          "heur_id": 6,
+          "signatures": [],
+          "value": "NtTerminateProcess"
+        },
+        {
+          "heur_id": 6,
+          "signatures": [],
+          "value": "RtlCompareMemory"
+        },
+        {
+          "heur_id": 6,
+          "signatures": [],
+          "value": "VirtualProtect"
+        },
+        {
+          "heur_id": 6,
+          "signatures": [],
+          "value": "memset"
+        }
+      ]
+    },
+    "temp_submission_data": {}
+  }
+}
