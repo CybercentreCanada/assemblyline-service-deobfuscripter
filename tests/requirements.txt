@@ -1,3 +1,4 @@
-assemblyline
-assemblyline-service-utilities
+assemblyline==4.7.4.4
+assemblyline-service-utilities==4.6.1.2
+multidecoder==1.6.27
 pytest
